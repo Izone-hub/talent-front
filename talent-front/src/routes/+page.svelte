@@ -1,2 +1,13 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<script>
+	import Hero from '$lib/components/sections/Hero.svelte'
+	import TalentCategories from '$lib/components/sections/TalentCategories.svelte'
+	import HowItWorks from '$lib/components/sections/HowItWorks.svelte'
+	import WhyChooseUs from '$lib/components/sections/WhyChooseUs.svelte'
+	import Testimonials from '$lib/components/sections/Testimonials.svelte'
+</script>
+
+<Hero />
+<TalentCategories />
+<HowItWorks />
+<WhyChooseUs />
+<Testimonials />
