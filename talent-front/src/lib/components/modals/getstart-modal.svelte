@@ -5,6 +5,8 @@
 
 	export let isOpen = false
 
+	import { auth } from '$lib/stores/authStore'
+
 	const dispatch = createEventDispatcher()
 
 	function close() {
@@ -12,9 +14,13 @@
 	}
 
 	function handleContinue() {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		goto('/jobs')
-		close()
+		if ($auth.isAuthenticated) {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			goto('/jobs')
+			close()
+		} else {
+			auth.loginWithGithub()
+		}
 	}
 </script>
 
