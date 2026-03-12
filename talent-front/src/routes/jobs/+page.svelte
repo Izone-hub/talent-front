@@ -1,69 +1,45 @@
 <script>
-	import JobDetailModal from '$lib/components/jobs/JobDetailModal.svelte'
+	import { onMount } from "svelte";
+	import JobDetailModal from "$lib/components/jobs/JobDetailModal.svelte";
+	import { jobService } from "$lib/api/job.service";
 
-	// Your job data (you can later fetch this from an API)
-	const jobs = [
-		{
-			id: 1,
-			title: 'Frontend Developer',
-			company: 'Tech Corp',
-			type: 'Remote',
-			salary: '$80k - $120k',
-			description:
-				'Build beautiful, responsive user interfaces with modern JavaScript frameworks. Work with a talented team on exciting projects.',
-			requirements: [
-				'3+ years in React or Svelte',
-				'Strong CSS & Tailwind skills',
-				'Experience with REST APIs'
-			],
-			benefits: ['Flexible hours', 'Home office stipend', 'Health insurance']
-		},
-		{
-			id: 2,
-			title: 'Backend Engineer',
-			company: 'Data Systems',
-			type: 'Hybrid',
-			salary: '$90k - $140k',
-			description:
-				'Design and maintain scalable server-side applications. Experience with Node.js, databases, and cloud infrastructure is a plus.',
-			requirements: ['5+ years in Node.js/Go', 'PostgreSQL expertise', 'AWS/Docker experience'],
-			benefits: ['Stock options', 'Professional development budget', 'Annual retreats']
-		},
-		{
-			id: 3,
-			title: 'UI/UX Designer',
-			company: 'Creative Studio',
-			type: 'On-site',
-			salary: '$70k - $100k',
-			description:
-				'Create intuitive and engaging user experiences. Strong portfolio in user research, wireframing, and prototyping required.',
-			requirements: [
-				'Figma expert',
-				'Experience with user testing',
-				'Strong visual design portfolio'
-			],
-			benefits: ['Creative environment', 'Top-tier equipment', 'Generous PTO']
-		}
-	]
+	/** @type {import('./$types').PageData} */
+	export let data;
+
+	/** @type {any[]} */
+	$: jobs = data.jobs || [];
 
 	// State to hold the currently selected job
 	/** @type {any} */
-	let selectedJob = null
+	let selectedJob = null;
+	let isLoadingDetail = false;
 
 	/**
-	 * @param {any} job
+	 * @param {any} jobSummary
 	 */
-	function openJobDetail(job) {
-    console.log("opening job is:",job)
-    console.log('Job type:', typeof job);
-    console.log('Is job a function?', typeof job === 'function');
+	async function openJobDetail(jobSummary) {
+		console.log("Opening job details for:", jobSummary.id);
 
-		selectedJob = job
-    const modal = document.getElementById('job-detail-modal')
-    if (modal) {
-        // @ts-ignore
-        modal.checked = true
-    }
+		// First, show what we have so the modal opens quickly
+		selectedJob = jobSummary;
+		const modal = document.getElementById("job-detail-modal");
+		if (modal) {
+			// @ts-ignore
+			modal.checked = true;
+		}
+
+		// Then, fetch full details for more information
+		try {
+			isLoadingDetail = true;
+			const fullJob = await jobService.getPublishedJob(jobSummary.id);
+			if (fullJob) {
+				selectedJob = fullJob;
+			}
+		} catch (error) {
+			console.error("Error fetching full job detail:", error);
+		} finally {
+			isLoadingDetail = false;
+		}
 	}
 </script>
 
@@ -72,10 +48,18 @@
 		<!-- Page content here -->
 		<div class="mx-auto w-full max-w-7xl px-4 py-8">
 			<!-- Header -->
-			<div class="mb-2 flex flex-col justify-between gap-4 p-6 md:flex-row md:items-center">
+			<div
+				class="mb-2 flex flex-col justify-between gap-4 p-6 md:flex-row md:items-center"
+			>
 				<div>
-					<h1 class="text-3xl font-bold tracking-tight text-slate-800">Active Job Openings</h1>
-					<p class="mt-2 text-slate-500">Discover the latest opportunities — updated regularly.</p>
+					<h1
+						class="text-3xl font-bold tracking-tight text-slate-800"
+					>
+						Active Job Openings
+					</h1>
+					<p class="mt-2 text-slate-500">
+						Discover the latest opportunities — updated regularly.
+					</p>
 				</div>
 				<div
 					class="flex w-full items-center overflow-hidden rounded-xl border border-slate-200 bg-white transition-all focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-400 md:w-auto"
@@ -166,7 +150,9 @@
 						</p>
 
 						<!-- Badges / tags -->
-						<div class="my-2 flex flex-wrap items-center justify-end gap-2">
+						<div
+							class="my-2 flex flex-wrap items-center justify-end gap-2"
+						>
 							<div
 								class="badge gap-1 rounded-lg badge-outline border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-600 badge-primary"
 							>
@@ -188,7 +174,7 @@
 										d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
 									/></svg
 								>
-								{job.type}
+								{job.job_type}
 							</div>
 							<div
 								class="badge gap-1 rounded-lg badge-outline border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-600 badge-success"
@@ -206,14 +192,47 @@
 										d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 									/></svg
 								>
-								{job.salary}
+								{job.salary_currency}
+								{job.salary_min.toLocaleString()} - {job.salary_max.toLocaleString()}
 							</div>
 						</div>
+					</li>
+				{:else}
+					<li class="col-span-full py-20 text-center text-slate-500">
+						<div
+							class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 transition-transform hover:scale-105"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-10 w-10 text-slate-400"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+								/>
+							</svg>
+						</div>
+						<h3 class="text-xl font-bold text-slate-800">
+							No jobs found
+						</h3>
+						<p class="mt-1 text-slate-500">
+							We couldn't find any job openings matching your
+							criteria.
+						</p>
 					</li>
 				{/each}
 			</ul>
 		</div>
 	</div>
 
-	<JobDetailModal job={selectedJob} modalId="job-detail-modal" />
+	<JobDetailModal
+		job={selectedJob}
+		modalId="job-detail-modal"
+		loading={isLoadingDetail}
+	/>
 </div>
