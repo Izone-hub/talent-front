@@ -1,27 +1,28 @@
 <script>
-	import { setContext } from 'svelte'
-	import Navbar from '$lib/components/layout/Navbar.svelte'
-	import Footer from '$lib/components/layout/Footer.svelte'
-	import './layout.css'
-	import favicon from '$lib/assets/icons/izone-favicon.svg'
+	import { setContext } from "svelte";
+	import Navbar from "$lib/components/layout/Navbar.svelte";
+	import Footer from "$lib/components/layout/Footer.svelte";
+	import "./layout.css";
+	import favicon from "$lib/assets/icons/izone-favicon.svg";
+	import Toast from "$lib/components/ui/toast.svelte";
 
-	let x = 0
-	let y = 0
-	let glowActive = false
+	let x = 0;
+	let y = 0;
+	let glowActive = false;
 
 	/** @param {MouseEvent} e */
 	function handleMouseMove(e) {
-		if (!glowActive) return
-		x = e.clientX
-		y = e.clientY
+		if (!glowActive) return;
+		x = e.clientX;
+		y = e.clientY;
 	}
 
 	setContext(
-		'setGlow',
+		"setGlow",
 		/** @param {boolean} value */ (value) => {
-			glowActive = value
-		}
-	)
+			glowActive = value;
+		},
+	);
 </script>
 
 <svelte:head>
@@ -53,6 +54,7 @@
 
 	<main class="relative z-10 grow">
 		<slot />
+		<Toast />
 	</main>
 
 	<Footer />
