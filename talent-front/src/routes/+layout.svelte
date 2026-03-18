@@ -1,28 +1,15 @@
 <script>
-	import { setContext } from "svelte";
-	import Navbar from "$lib/components/layout/Navbar.svelte";
-	import Footer from "$lib/components/layout/Footer.svelte";
+	import { onMount } from "svelte";
+	import { auth } from "$lib/stores/authStore";
+	import DefaultLayout from "$lib/components/layout/DefaultLayout.svelte";
+	import AdminLayout from "$lib/components/layout/AdminLayout.svelte";
+	import Toast from "$lib/components/ui/toast.svelte";
 	import "./layout.css";
 	import favicon from "$lib/assets/icons/izone-favicon.svg";
-	import Toast from "$lib/components/ui/toast.svelte";
 
-	let x = 0;
-	let y = 0;
-	let glowActive = false;
-
-	/** @param {MouseEvent} e */
-	function handleMouseMove(e) {
-		if (!glowActive) return;
-		x = e.clientX;
-		y = e.clientY;
-	}
-
-	setContext(
-		"setGlow",
-		/** @param {boolean} value */ (value) => {
-			glowActive = value;
-		},
-	);
+	onMount(() => {
+		auth.init();
+	});
 </script>
 
 <svelte:head>
@@ -31,11 +18,7 @@
 		name="description"
 		content="Connecting top technology talent with innovative companies and startups."
 	/>
-
-	<!-- Favicon -->
 	<link rel="icon" href={favicon} />
-
-	<!-- Optional: better sharing preview -->
 	<meta property="og:title" content="iZone | Technology Talent Platform" />
 	<meta
 		property="og:description"
@@ -43,19 +26,17 @@
 	/>
 </svelte:head>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	class="bgGrid bgGradient cursor-glow flex min-h-screen flex-col"
-	class:glow-active={glowActive}
-	on:mousemove={handleMouseMove}
-	style="--x: {x}px; --y: {y}px;"
->
-	<Navbar />
-
-	<main class="relative z-10 grow">
+{#if $auth.loading}
+	<div class="flex h-screen items-center justify-center bg-gray-50">
+		<div class="loading loading-spinner loading-lg text-purple-600"></div>
+	</div>
+{:else if $auth.isAuthenticated && $auth.user?.role === "admin"}
+	<AdminLayout>
 		<slot />
 		<Toast />
-	</main>
-
-	<Footer />
-</div>
+	</AdminLayout>
+{:else}
+	<DefaultLayout>
+		<slot />
+	</DefaultLayout>
+{/if}

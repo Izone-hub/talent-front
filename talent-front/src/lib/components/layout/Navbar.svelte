@@ -1,26 +1,26 @@
 <script>
 	/* eslint-disable svelte/no-navigation-without-resolve */
-	import { NAVIGATION_LINKS } from '$lib/constants/navigation'
-	import IZoneLogo from '$lib/assets/icons/IZone-logo.png'
-	import GetStartModal from '$lib/components/modals/getstart-modal.svelte'
-	import { auth } from '$lib/stores/authStore'
-	import { onMount } from 'svelte'
+	import { NAVIGATION_LINKS } from "$lib/constants/navigation";
+	import IZoneLogo from "$lib/assets/icons/IZone-logo.png";
+	import GetStartModal from "$lib/components/modals/getstart-modal.svelte";
+	import { auth } from "$lib/stores/authStore";
 
-	let isGetStartModalOpen = false
-
-	onMount(() => {
-		auth.init()
-	})
+	let isGetStartModalOpen = false;
 </script>
 
-<nav class="sticky top-0 z-50 w-full border-b border-gray-200 bg-gray-50 opacity-90">
-	<div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+<nav
+	class="sticky top-0 z-50 w-full border-b border-gray-200 bg-gray-50 opacity-90"
+>
+	<div
+		class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
+	>
 		<!-- Left: Logo -->
 		<div class="flex items-center gap-2">
 			<img src={IZoneLogo} alt="Talent izone" class="h-7 w-auto" />
 			<div class="flex flex-col leading-tight">
 				<span class="text-lg font-bold text-purple-700">Talent</span>
-				<span class="text-xs text-gray-500">connect your first job</span>
+				<span class="text-xs text-gray-500">connect your first job</span
+				>
 			</div>
 		</div>
 
@@ -41,18 +41,34 @@
 		<!-- Right: Actions -->
 		<div class="flex items-center gap-4">
 			{#if $auth.loading}
-				<div class="loading loading-spinner loading-md text-purple-600"></div>
+				<div
+					class="loading loading-spinner loading-md text-purple-600"
+				></div>
 			{:else if $auth.isAuthenticated}
 				<div class="dropdown dropdown-end">
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<div tabindex="0" role="button" class="avatar btn btn-circle btn-ghost">
+					<div
+						tabindex="0"
+						role="button"
+						class="avatar btn btn-circle btn-ghost"
+						aria-label="User menu"
+					>
 						<div class="w-10 rounded-full border border-purple-200">
 							<!-- Display user avatar if available, otherwise fallback -->
 							{#if $auth.user?.avatar_url}
-								<img alt="User Avatar" src={$auth.user.avatar_url} />
+								<img
+									alt="User Avatar"
+									src={$auth.user.avatar_url}
+								/>
 							{:else}
-								<div class="flex h-full w-full items-center justify-center bg-purple-100 text-purple-700 font-bold">
-									{$auth.user?.name ? $auth.user.name.charAt(0).toUpperCase() : 'U'}
+								<div
+									class="flex h-full w-full items-center justify-center bg-purple-100 text-purple-700 font-bold"
+								>
+									{$auth.user?.name
+										? $auth.user.name
+												.charAt(0)
+												.toUpperCase()
+										: "U"}
 								</div>
 							{/if}
 						</div>
@@ -65,11 +81,17 @@
 						<li>
 							<a href="/profile" class="justify-between">
 								Profile
-								<span class="badge badge-primary badge-sm">New</span>
+								<span class="badge badge-primary badge-sm"
+									>New</span
+								>
 							</a>
 						</li>
 						<li><a href="/applications">My Applications</a></li>
-						<li><button on:click={() => auth.logout()}>Logout</button></li>
+						<li>
+							<button on:click={() => auth.logout()}
+								>Logout</button
+							>
+						</li>
 					</ul>
 				</div>
 			{:else}
@@ -85,4 +107,7 @@
 	</div>
 </nav>
 
-<GetStartModal isOpen={isGetStartModalOpen} on:close={() => (isGetStartModalOpen = false)} />
+<GetStartModal
+	isOpen={isGetStartModalOpen}
+	on:close={() => (isGetStartModalOpen = false)}
+/>
