@@ -47,13 +47,42 @@ export const jobService = {
     getPublishedJob: async (id) => {
         try {
             const response = await apiClient.get(`/jobs/${id}`);
-            // If the single job endpoint behaves like common Go patterns, 
-            // it might return the job directly or wrapped. 
-            // Assuming it returns the job directly based on common mux.HandleFunc patterns.
             return response;
         } catch (error) {
             console.error(`Failed to get job with id ${id}:`, error);
             throw error;
         }
+    },
+
+    /** Admin Features **/
+
+    createJob: async (jobData) => {
+        const response = await apiClient.post('/jobs', jobData);
+        return response;
+    },
+
+    listMyJobs: async () => {
+        const response = await apiClient.get('/jobs/my');
+        return response?.jobs || [];
+    },
+
+    updateJob: async (id, jobData) => {
+        const response = await apiClient.put(`/jobs/${id}`, jobData);
+        return response;
+    },
+
+    publishJob: async (id) => {
+        const response = await apiClient.patch(`/jobs/${id}/publish`);
+        return response;
+    },
+
+    closeJob: async (id) => {
+        const response = await apiClient.patch(`/jobs/${id}/close`);
+        return response;
+    },
+
+    archiveJob: async (id) => {
+        const response = await apiClient.patch(`/jobs/${id}/archive`);
+        return response;
     }
 };

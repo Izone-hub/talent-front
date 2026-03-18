@@ -14,7 +14,11 @@
             // If the backend sends the token in the URL, we save it
             localStorage.setItem("auth_token", token);
             await auth.init(); // Re-verify and load user
-            goto("/jobs");
+            if ($auth.user?.role === "admin") {
+                goto("/admin/dashboard");
+            } else {
+                goto("/jobs");
+            }
         } else {
             // If there's no token in URL, maybe the backend set a cookie?
             // Or maybe it's an error.

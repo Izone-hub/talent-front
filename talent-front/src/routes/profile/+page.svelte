@@ -154,7 +154,7 @@
                 </p>
                 <button
                     on:click={() => auth.loginWithGithub()}
-                    class="btn bg-slate-800 hover:bg-slate-900 text-white gap-2 px-8"
+                    class="btn btn-primary w-full border-none bg-purple-600 hover:bg-purple-700 text-white"
                 >
                     <Github class="h-4 w-4" />
                     Sign in with GitHub
