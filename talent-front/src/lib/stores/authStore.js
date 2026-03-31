@@ -16,8 +16,8 @@ function createAuthStore() {
     return {
         subscribe,
 
-        init: async () => {
-            update(state => ({ ...state, loading: true }));
+        init: async (forceLoading = true) => {
+            if (forceLoading) update(state => ({ ...state, loading: true }));
             try {
                 const result = await authApi.checkAuth();
                 console.log("Auth init checkAuth result:", result);
