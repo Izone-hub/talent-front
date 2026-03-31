@@ -10,10 +10,12 @@
         CheckCircle2,
         Archive,
         Pencil,
+        X,
     } from "lucide-svelte";
     import { jobService } from "$lib/api/job.service";
     import { showToast } from "$lib/stores/toast";
     import EditJobModal from "./edit-job.svelte";
+    import { tagService } from "$lib/api/tag.service";
 
     const dispatch = createEventDispatcher();
 
@@ -83,6 +85,21 @@
             close();
         } catch (error) {
             showToast("Failed to update job", "error");
+        } finally {
+            isLoadingAction = false;
+        }
+    }
+
+    async function handleRemoveTag(tagId) {
+        if (!job || !job.id) return;
+        isLoadingAction = true;
+        try {
+            await tagService.removeTagFromJob(tagId, job.id);
+            showToast("Tag removed successfully", "success");
+            dispatch("jobUpdated");
+            close();
+        } catch (error) {
+            showToast("Failed to remove tag", "error");
         } finally {
             isLoadingAction = false;
         }
@@ -234,6 +251,45 @@
                             </h4>
 
                             <ul class="space-y-4">
+                                <li>
+                                    <span
+                                        class="text-xs font-semibold text-gray-400 block mb-1"
+                                        >Tags</span
+                                    >
+                                    <div class="flex flex-wrap gap-2">
+                                        {#if !job.tags || job.tags.length === 0}
+                                            <span
+                                                class="text-gray-400 text-sm italic"
+                                                >No tags assigned</span
+                                            >
+                                        {:else}
+                                            {#each job.tags as tag}
+                                                <div
+                                                    class="badge badge-lg font-bold gap-2 pr-1 h-auto py-1"
+                                                    style="background-color: {tag.color ||
+                                                        '#8B5CF6'}; color: white; border: none;"
+                                                >
+                                                    <span class="text-xs"
+                                                        >{tag.name}</span
+                                                    >
+                                                    <button
+                                                        class="hover:bg-black/20 rounded-full p-0.5 transition-colors"
+                                                        on:click|stopPropagation={() =>
+                                                            handleRemoveTag(
+                                                                tag.id ||
+                                                                    tag.ID,
+                                                            )}
+                                                        title="Remove tag"
+                                                        disabled={isLoadingAction}
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            {/each}
+                                        {/if}
+                                    </div>
+                                </li>
+
                                 <li>
                                     <span
                                         class="text-xs font-semibold text-gray-400 block mb-1"
