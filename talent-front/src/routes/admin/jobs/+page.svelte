@@ -24,7 +24,7 @@
     let isDetailModalOpen = false;
     let selectedJob = null;
     let searchQuery = "";
-    let currentTab = "draft";
+    let currentTab = "published";
 
     // Form state for new job
     let newJob = {
