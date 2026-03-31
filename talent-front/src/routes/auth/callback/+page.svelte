@@ -13,7 +13,7 @@
         if (token) {
             // If the backend sends the token in the URL, we save it
             localStorage.setItem("auth_token", token);
-            await auth.init(); // Re-verify and load user
+            await auth.init(false); // Re-verify and load user (without global spinner)
             if ($auth.user?.role === "admin") {
                 goto("/admin/dashboard");
             } else {
@@ -22,7 +22,7 @@
         } else {
             // If there's no token in URL, maybe the backend set a cookie?
             // Or maybe it's an error.
-            await auth.init();
+            await auth.init(false);
             goto("/");
         }
     });
