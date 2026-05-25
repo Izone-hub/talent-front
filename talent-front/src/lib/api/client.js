@@ -45,11 +45,18 @@ class ApiClient {
 				return response.blob();
 			}
 
-			// Parse JSON response
-			const data = await response.json();
+			// Handle empty responses (like 204 No Content)
+			const contentType = response.headers.get('content-type');
+			const isJson = contentType && contentType.includes('application/json');
+
+			let data = {};
+			if (isJson) {
+				const text = await response.text();
+				data = text ? JSON.parse(text) : {};
+			}
 
 			if (!response.ok) {
-				throw new Error(data.message || 'API request failed');
+				throw new Error(data.message || `API request failed with status ${response.status}`);
 			}
 
 			return data;
