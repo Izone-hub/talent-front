@@ -11,12 +11,12 @@
     let loading = $state(true);
     let submitted = $state(false);
 
-    // 🔥 FIX 1: IDው ሁልጊዜ ተለዋዋጭና ዝግጁ እንዲሆን $derived Rune እንጠቀማለን
+    // 🔥 FIX 1: Ensure ID is always reactive by using $derived Rune
     let currentAttemptId = $derived($page.params.id);
     let debounceTimer;
 
     onMount(async () => {
-        // IDው መኖሩን ቼክ እናደርጋለን
+        // Check if ID exists
         if (!currentAttemptId) {
             showToast("Missing runtime workspace parameter ID.", "error");
             loading = false;
@@ -31,7 +31,7 @@
             await quizService.startQuiz(currentAttemptId);
             const res = await quizService.getQuizQuestions(currentAttemptId);
 
-            // 🔥 FIX 2: ከባክኤንድ የሚመጣውን ፎርማት በጥንቃቄ መፈተሽ (Array መሆኑን)
+            // 🔥 FIX 2: Carefully check the format returned from backend (ensure it is an Array)
             if (res && res.data) {
                 questions = res.data;
             } else if (Array.isArray(res)) {
@@ -61,7 +61,7 @@
         if (currentQuestionIndex < questions.length - 1) currentQuestionIndex++;
     }
 
-    // ወደ ኋላ መመለሻ
+    // Go back
     function prevQuestion() {
         if (currentQuestionIndex > 0) currentQuestionIndex--;
     }
@@ -506,7 +506,7 @@
         font-size: 1.5rem;
     }
 
-    /* 🔥 FIX 3: ፖፕአፕ ኤረሩ ከበስተጀርባ ሳይደበዝዝ ደምቆ እንዲወጣ የሚያደርግ ግሎባል ስታይል */
+    /* 🔥 FIX 3: Global style to make the error popup stand out */
     :global(body .toast-error),
     :global(body [data-toast-type="error"]) {
         background-color: #ef4444 !important;
