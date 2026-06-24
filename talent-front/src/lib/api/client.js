@@ -56,7 +56,7 @@ class ApiClient {
 			}
 
 			if (!response.ok) {
-				throw new Error(data.message || `API request failed with status ${response.status}`);
+				throw new Error(data.error || data.message || `API request failed with status ${response.status}`);
 			}
 
 			return data;

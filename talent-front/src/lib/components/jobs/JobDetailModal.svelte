@@ -1,10 +1,32 @@
 <script>
 	/** @type {any} */
+	import { goto } from "$app/navigation";
 	export let job = null;
 	export let modalId = "job-detail-modal";
 	export let loading = false;
 	import { Bookmark } from "@lucide/svelte";
 	import { auth } from "$lib/stores/authStore";
+	import { jobService } from "$lib/api/job.service.js";
+
+	let applying = false;
+	let applyError = "";
+
+	async function handleApply() {
+		if (!job || applying) return;
+		try {
+			applying = true;
+			applyError = "";
+			await jobService.applyToJob(job.id);
+			goto("/quizzes");
+		} catch (error) {
+			console.error("Failed to apply:", error);
+			// The error message comes from the backend or Axios depending on apiClient implementation
+			applyError = error?.response?.data?.error || error.message || "Failed to apply";
+		} finally {
+			applying = false;
+		}
+	}
+
 	$: requirementsList = job?.requirements
 		? job.requirements
 				.split(",")
@@ -36,7 +58,6 @@
   "
 	>
 		{#if job}
-			<!-- ─── Sticky Header ─── -->
 			<div
 				class="
         sticky top-0 z-30
@@ -90,11 +111,9 @@
 				</div>
 			</div>
 
-			<!-- ─── Scrollable Content ─── -->
 			<div
 				class="max-h-[calc(92vh-140px)] overflow-y-auto px-5 pt-6 pb-30 sm:max-h-[calc(90vh-140px)] sm:px-8 lg:px-10"
 			>
-				<!-- Quick stats chips -->
 				<div class="mb-7 flex flex-wrap gap-2.5 sm:mb-9 sm:gap-3">
 					<div
 						class="badge gap-1.5 badge-outline border-slate-200 bg-white/60 px-3 py-3 text-sm font-medium text-slate-600"
@@ -150,7 +169,6 @@
 					</div>
 				</div>
 
-				<!-- Description -->
 				<section class="mb-8 sm:mb-10">
 					<h3
 						class="mb-3.5 flex items-center gap-2.5 text-lg font-semibold text-slate-800"
@@ -168,7 +186,6 @@
 					</div>
 				</section>
 
-				<!-- Requirements -->
 				{#if requirementsList.length > 0}
 					<section class="mb-8 sm:mb-10">
 						<h3
@@ -182,7 +199,7 @@
 							{#each requirementsList as req}
 								<li class="flex items-start gap-3">
 									<svg
-										class="text-gray mt-0.5 h-4 w-4 shrink-0"
+										class="text-slate-400 mt-0.5 h-4 w-4 shrink-0"
 										viewBox="0 0 20 20"
 										fill="currentColor"
 									>
@@ -199,7 +216,6 @@
 					</section>
 				{/if}
 
-				<!-- Benefits -->
 				{#if benefitsList.length > 0}
 					<section class="mb-6">
 						<h3
@@ -213,7 +229,7 @@
 							{#each benefitsList as benefit}
 								<li class="flex items-start gap-3">
 									<svg
-										class="text-gray mt-0.5 h-4 w-4 shrink-0"
+										class="text-slate-400 mt-0.5 h-4 w-4 shrink-0"
 										viewBox="0 0 20 20"
 										fill="currentColor"
 									>
@@ -231,7 +247,6 @@
 				{/if}
 			</div>
 
-			<!-- ─── Sticky Footer CTA ─── -->
 			<div
 				class="
         sticky bottom-0 z-30
@@ -239,40 +254,53 @@
         pb-6 sm:px-8
       "
 			>
+				{#if applyError}
+					<div class="mb-4 text-center text-sm font-medium text-red-600 bg-red-50 p-3 rounded-lg border border-red-100">
+						{applyError}
+					</div>
+				{/if}
+
 				{#if $auth.isAuthenticated}
 					<button
+						onclick={handleApply}
+						disabled={applying}
 						class="
-						btn h-12 w-full rounded-lg
-						border border-indigo-600/90 bg-indigo-600 text-white
-						text-lg font-semibold
-						transition-all duration-300 sm:h-13 hover:bg-indigo-700
-					"
+                        btn h-12 w-full rounded-lg
+                        border border-indigo-600/90 bg-indigo-600 text-white
+                        text-lg font-semibold
+                        transition-all duration-300 sm:h-13 hover:bg-indigo-700
+                    "
 					>
-						Apply Now
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="ml-2 h-5 w-5"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M13 7l5 5m0 0l-5 5m5-5H6"
-							/>
-						</svg>
+						{#if applying}
+							<span class="loading loading-spinner loading-md"></span>
+							Applying...
+						{:else}
+							Apply Now
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="ml-2 h-5 w-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M13 7l5 5m0 0l-5 5m5-5H6"
+								/>
+							</svg>
+						{/if}
 					</button>
 				{:else}
 					<button
-						on:click={() => auth.loginWithGithub()}
+						onclick={() => auth.loginWithGithub()}
 						class="
-						btn h-12 w-full rounded-lg
-						border border-indigo-600/90
-						text-lg font-semibold text-indigo-600/90
-						transition-all duration-300 sm:h-13
-					"
+                        btn h-12 w-full rounded-lg
+                        border border-indigo-600/90
+                        text-lg font-semibold text-indigo-600/90
+                        transition-all duration-300 sm:h-13
+                    "
 					>
 						Login to Apply
 						<svg
@@ -297,3 +325,13 @@
 
 	<label class="modal-backdrop" for={modalId}></label>
 </div>
+
+<style>
+	:global(.checkbox) {
+		border-width: 2px;
+	}
+	:global(.btn) {
+		text-transform: none;
+		letter-spacing: normal;
+	}
+</style>

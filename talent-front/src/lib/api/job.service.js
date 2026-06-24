@@ -84,5 +84,12 @@ export const jobService = {
     archiveJob: async (id) => {
         const response = await apiClient.patch(`/jobs/${id}/archive`);
         return response;
+    },
+
+    /** Applicant Features **/
+    
+    applyToJob: async (id) => {
+        const response = await apiClient.post(`/jobs/${id}/apply`);
+        return response;
     }
 };

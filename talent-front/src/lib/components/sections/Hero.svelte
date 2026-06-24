@@ -1,10 +1,12 @@
 <script>
-	export let title = 'Find Jobs. Showcase Your Skills. Get Hired.'
-	export let subtitle =
-		'iZone is a talent and job platform where professionals apply for real opportunities by presenting their experience, skills, and portfolio — all in one place.'
+	import { goto } from "$app/navigation";
 
-	import { getContext } from 'svelte'
-	const setGlow = getContext('setGlow')
+	export let title = "Find Jobs. Showcase Your Skills. Get Hired.";
+	export let subtitle =
+		"iZone is a talent and job platform where professionals apply for real opportunities by presenting their experience, skills, and portfolio — all in one place.";
+
+	import { getContext } from "svelte";
+	const setGlow = getContext("setGlow");
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -24,6 +26,7 @@
 
 	<div class="flex gap-4">
 		<button
+			on:click={() => goto("/jobs")}
 			class="btn h-auto min-h-0 gap-2 rounded-xl border-none bg-violet-600 px-10 py-3 text-base font-bold text-white shadow-lg transition-all btn-primary hover:-translate-y-1 hover:bg-violet-700 hover:shadow-xl"
 		>
 			Explore Jobs
@@ -42,6 +45,11 @@
 				/>
 			</svg>
 		</button>
-		<button class="rounded-xl border border-gray-300 px-6 py-3"> Learn More </button>
+		<button
+			on:click={() => goto("/contact")}
+			class="rounded-xl border border-gray-300 px-6 py-3"
+		>
+			Learn More
+		</button>
 	</div>
 </section>

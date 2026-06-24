@@ -1,10 +1,12 @@
 <script>
 	/* eslint-disable svelte/no-navigation-without-resolve */
-	import IZoneLogo from '$lib/assets/icons/IZone-logo.png'
+	import IZoneLogo from "$lib/assets/icons/IZone-logo.png";
 </script>
 
 <!-- class="flex min-h-screen flex-col bgGrid bgGradient cursor-glow" -->
-<footer class="footer bg-neutral p-10 text-neutral-content sm:footer-horizontal">
+<footer
+	class="footer bg-neutral p-10 text-neutral-content sm:footer-horizontal"
+>
 	<div class="mx-auto flex max-w-7xl flex-col gap-10 md:flex-row md:gap-60">
 		<aside>
 			<img src={IZoneLogo} alt="Talent izone" class="h-7 w-auto" />
@@ -23,9 +25,9 @@
 		</nav>
 		<nav class="flex flex-col gap-2">
 			<h6 class="footer-title">Company</h6>
-			<a href="/" class="link link-hover">About us</a>
-			<a href="/" class="link link-hover">Contact</a>
-			<a href="/" class="link link-hover">Jobs</a>
+			<a href="/about" class="link link-hover">About us</a>
+			<a href="/contact" class="link link-hover">Contact</a>
+			<a href="/jobs" class="link link-hover">Jobs</a>
 			<a href="/" class="link link-hover">Press kit</a>
 		</nav>
 		<nav class="flex flex-col gap-2">
