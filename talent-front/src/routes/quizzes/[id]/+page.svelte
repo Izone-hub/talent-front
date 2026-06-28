@@ -5,65 +5,64 @@
     import { showToast } from "$lib/stores/toast";
 
     // --- Svelte 5 Runes ---
-    let currentQuestionIndex = $state(0);
-    let questions = $state([]);
-    let answers = $state({});
+    let currentAttemptId = $derived($page.params.id);
+    let appId = $derived($page.url.searchParams.get("application_id"));
+    let jobId = $derived($page.url.searchParams.get("job_id"));
+    let currentQuestion = $state(null);
+    let answers = $state({}); // keep tracking local answer string
     let loading = $state(true);
     let submitted = $state(false);
-
-    // 🔥 FIX 1: Ensure ID is always reactive by using $derived Rune
-    let currentAttemptId = $derived($page.params.id);
+    let isFinished = $state(false);
     let debounceTimer;
 
     onMount(async () => {
-        // Check if ID exists
         if (!currentAttemptId) {
             showToast("Missing runtime workspace parameter ID.", "error");
             loading = false;
             return;
         }
-        await startAndFetchQuiz();
+        await startAndFetchNextQuestion();
     });
 
-    async function startAndFetchQuiz() {
+    async function startAndFetchNextQuestion() {
         loading = true;
         try {
-            await quizService.startQuiz(currentAttemptId);
-            const res = await quizService.getQuizQuestions(currentAttemptId);
-
-            // 🔥 FIX 2: Carefully check the format returned from backend (ensure it is an Array)
-            if (res && res.data) {
-                questions = res.data;
-            } else if (Array.isArray(res)) {
-                questions = res;
-            } else {
-                questions = [];
-            }
-
-            if (questions.length === 0) {
-                showToast(
-                    "No active questions parsed from the database pool.",
-                    "warning",
-                );
-            }
+            await quizService.startQuiz(currentAttemptId, {
+                application_id: appId || "",
+                job_id: jobId || ""
+            });
+            await loadNextQuestion();
         } catch (error) {
-            console.error("Fetch Error details:", error);
-            showToast(
-                "Failed to compile matrix structure from endpoint",
-                "error",
-            );
+            console.error("Start Error details:", error);
+            showToast("Failed to compile matrix structure from endpoint", "error");
         } finally {
             loading = false;
         }
     }
 
-    function nextQuestion() {
-        if (currentQuestionIndex < questions.length - 1) currentQuestionIndex++;
-    }
-
-    // Go back
-    function prevQuestion() {
-        if (currentQuestionIndex > 0) currentQuestionIndex--;
+    async function loadNextQuestion() {
+        loading = true;
+        try {
+            const res = await quizService.getQuizQuestion(currentAttemptId);
+            
+            if (res && res.status === "finished") {
+                currentQuestion = null;
+                isFinished = true;
+            } else if (res && res.data) {
+                currentQuestion = res.data;
+            } else if (res && Object.keys(res).length > 0) {
+                currentQuestion = res;
+            } else {
+                currentQuestion = null;
+                isFinished = true;
+            }
+        } catch (error) {
+            // Treat error (like 404) as finished
+            currentQuestion = null;
+            isFinished = true;
+        } finally {
+            loading = false;
+        }
     }
 
     function handleAnswerSelection(questionId, value, isCode = false) {
@@ -72,15 +71,17 @@
 
         if (isCode) {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(async () => {
-                await sendAnswerToBackend(questionId, stringValue);
+            debounceTimer = setTimeout(() => {
+                // local save debounce
             }, 500);
-        } else {
-            sendAnswerToBackend(questionId, stringValue);
         }
     }
 
-    async function sendAnswerToBackend(questionId, stringValue) {
+    async function saveAnswerAndNext() {
+        if (!currentQuestion) return;
+        const questionId = currentQuestion.id;
+        const stringValue = answers[questionId] || "";
+
         try {
             const payload = {
                 question_id: questionId,
@@ -88,9 +89,15 @@
                 time_spent_seconds: 10,
                 is_skipped: false,
             };
+            loading = true;
             await quizService.saveAnswer(currentAttemptId, payload);
+            
+            // Clear input logic if needed, but answered are mapped by questionId.
+            await loadNextQuestion();
         } catch (error) {
             console.error("Failed to stream answer payload:", error);
+            showToast("Failed to save answer", "error");
+            loading = false;
         }
     }
 
@@ -99,10 +106,8 @@
         try {
             await quizService.submitQuiz(currentAttemptId);
             submitted = true;
-            showToast(
-                "Assessment finalized and submitted successfully!",
-                "success",
-            );
+            showToast("Assessment finalized and submitted successfully!", "success");
+            // window.location.href = "/dashboard";
         } catch (error) {
             showToast("Error executing core submission compilation", "error");
         } finally {
@@ -134,7 +139,21 @@
             <div class="spinner"></div>
             <p>Syncing active runtime configurations from database pool...</p>
         </div>
-    {:else if questions.length === 0}
+    {:else if isFinished}
+        <div class="card result animate-scale">
+            <div class="success-icon">✓</div>
+            <h2>Assessment Locked</h2>
+            <p>
+                All functional parameters have been securely committed to the
+                central database stack.
+            </p>
+            <div class="actions" style="justify-content: center;">
+                <button onclick={handleSubmitQuiz} class="btn-submit">
+                    Submit Assessment Block
+                </button>
+            </div>
+        </div>
+    {:else if !currentQuestion}
         <div class="card empty">
             <p>
                 No compiled verification components linked to this workspace
@@ -142,14 +161,14 @@
             </p>
         </div>
     {:else if !submitted}
-        {@const activeQuestion = questions[currentQuestionIndex]}
+        {@const activeQuestion = currentQuestion}
         {@const optionsList = parseOptions(activeQuestion?.options)}
 
         <div class="progress-bar-container">
+            <!-- Progress bar can be static or hidden if we don't know total count, or we can just show an infinite loading bar -->
             <div
                 class="progress-bar"
-                style="width: {((currentQuestionIndex + 1) / questions.length) *
-                    100}%"
+                style="width: 50%"
             ></div>
         </div>
 
@@ -327,25 +346,13 @@
         {/if}
 
         <div class="actions">
-            <button
-                class="btn-secondary"
-                onclick={prevQuestion}
-                disabled={currentQuestionIndex === 0}
-            >
-                Previous Component
+            <div></div> <!-- empty spacer instead of previous button -->
+            <button class="btn-primary" onclick={saveAnswerAndNext}>
+                Save Answer & Next
             </button>
-            {#if currentQuestionIndex < questions.length - 1}
-                <button class="btn-primary" onclick={nextQuestion}
-                    >Next Component</button
-                >
-            {:else}
-                <button onclick={handleSubmitQuiz} class="btn-submit"
-                    >Submit Assessment Block</button
-                >
-            {/if}
         </div>
         <p class="progress-txt">
-            Component Framework {currentQuestionIndex + 1} of {questions.length}
+            Active Component Instance
         </p>
     {:else}
         <div class="card result animate-scale">

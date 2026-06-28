@@ -34,8 +34,20 @@
         if (!jobId) return;
         loadingApps = true;
         try {
-            applications = await applicationService.getJobApplications(jobId);
-            if (!applications) applications = [];
+            const rawApps = await applicationService.getJobApplications(jobId);
+            
+            // Map the API PascalCase data to the snake_case keys used in the template
+            applications = (rawApps || []).map(app => ({
+                id: app.ID,
+                github_username: app.GithubUsername,
+                applicant_name: app.ApplicantName || app.GithubUsername, // Fallback to username
+                applicant_email: app.ApplicantEmail,
+                applicant_avatar: app.ApplicantAvatarUrl,
+                status: app.Status,
+                quiz_score: app.QuizScore,
+                quiz_passed: app.QuizPassed,
+                created_at: app.CreatedAt
+            }));
         } catch (error) {
             showToast("Failed to load applications", "error");
         } finally {
@@ -52,7 +64,7 @@
         try {
             await applicationService.acceptApplication(appId);
             showToast("Application accepted!", "success");
-            await loadApplications(selectedJobId); // refresh
+            await loadApplications(selectedJobId); 
         } catch (error) {
             showToast("Failed to accept application", "error");
         }
@@ -61,16 +73,10 @@
 
 <div class="min-h-screen bg-slate-50 p-4 md:p-6 font-sans">
     <div class="max-w-6xl mx-auto">
-        <div
-            class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
-        >
+        <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 class="text-xl font-bold text-slate-800">
-                    Manage Applications
-                </h1>
-                <p class="text-xs text-slate-500 mt-1">
-                    Review candidates for your job postings.
-                </p>
+                <h1 class="text-xl font-bold text-slate-800">Manage Applications</h1>
+                <p class="text-xs text-slate-500 mt-1">Review candidates for your job postings.</p>
             </div>
 
             {#if !loadingJobs && jobs.length > 0}
@@ -92,19 +98,13 @@
                 <span class="loading loading-spinner text-purple-600"></span>
             </div>
         {:else if jobs.length === 0}
-            <div
-                class="bg-white rounded-xl p-12 text-center border border-slate-200"
-            >
+            <div class="bg-white rounded-xl p-12 text-center border border-slate-200">
                 <Briefcase class="mx-auto text-slate-300 mb-4" size={32} />
                 <h3 class="font-bold text-slate-700">No Jobs Posted</h3>
-                <p class="text-sm text-slate-500 mt-2">
-                    You need to post a job before you can receive applications.
-                </p>
+                <p class="text-sm text-slate-500 mt-2">You need to post a job before you can receive applications.</p>
             </div>
         {:else}
-            <div
-                class="bg-white rounded-xl border border-slate-200 overflow-hidden"
-            >
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="table w-full text-sm">
                         <thead class="bg-slate-50 text-slate-600">
@@ -120,52 +120,32 @@
                             {#if loadingApps}
                                 <tr>
                                     <td colspan="5" class="text-center py-8">
-                                        <span
-                                            class="loading loading-spinner text-purple-600"
-                                        ></span>
+                                        <span class="loading loading-spinner text-purple-600"></span>
                                     </td>
                                 </tr>
                             {:else if applications.length === 0}
                                 <tr>
-                                    <td
-                                        colspan="5"
-                                        class="text-center py-12 text-slate-500"
-                                    >
-                                        No applications received for this job
-                                        yet.
+                                    <td colspan="5" class="text-center py-12 text-slate-500">
+                                        No applications received for this job yet.
                                     </td>
                                 </tr>
                             {:else}
                                 {#each applications as app (app.id)}
-                                    <tr
-                                        class="hover:bg-slate-50/50 transition-colors"
-                                    >
+                                    <tr class="hover:bg-slate-50/50 transition-colors">
                                         <td>
-                                            <div
-                                                class="flex items-center gap-3"
-                                            >
-                                                <div
-                                                    class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold"
-                                                >
-                                                    {app.github_username
-                                                        ? app.github_username
-                                                              .charAt(0)
-                                                              .toUpperCase()
-                                                        : "U"}
-                                                </div>
-                                                <div>
-                                                    <div
-                                                        class="font-bold text-slate-800"
-                                                    >
-                                                        {app.github_username ||
-                                                            "Unknown User"}
+                                            <div class="flex items-center gap-3">
+                                                {#if app.applicant_avatar}
+                                                    <img src={app.applicant_avatar} alt={app.applicant_name} class="w-8 h-8 rounded-full" />
+                                                {:else}
+                                                    <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+                                                        {app.applicant_name?.charAt(0).toUpperCase() || 'U'}
                                                     </div>
+                                                {/if}
+                                                <div>
+                                                    <div class="font-bold text-slate-800">{app.applicant_name}</div>
                                                     {#if app.applicant_email}
-                                                        <div
-                                                            class="text-xs text-slate-500 flex items-center gap-1 mt-0.5"
-                                                        >
-                                                            <Mail size={10} />
-                                                            {app.applicant_email}
+                                                        <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                                            <Mail size={10} /> {app.applicant_email}
                                                         </div>
                                                     {/if}
                                                 </div>
@@ -173,62 +153,32 @@
                                         </td>
 
                                         <td>
-                                            <span
-                                                class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide rounded-md
-                                                {app.status === 'accepted'
-                                                    ? 'bg-emerald-50 text-emerald-700'
-                                                    : app.status === 'rejected'
-                                                      ? 'bg-rose-50 text-rose-700'
-                                                      : app.status ===
-                                                          'submitted'
-                                                        ? 'bg-blue-50 text-blue-700'
-                                                        : 'bg-violet-50 text-violet-700'}
-                                            "
-                                            >
+                                            <span class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide rounded-md
+                                                {app.status === 'accepted' ? 'bg-emerald-50 text-emerald-700' : 
+                                                 app.status === 'rejected' ? 'bg-rose-50 text-rose-700' : 
+                                                 app.status === 'submitted' ? 'bg-blue-50 text-blue-700' : 'bg-violet-50 text-violet-700'}">
                                                 {app.status || "submitted"}
                                             </span>
                                         </td>
 
                                         <td>
                                             {#if app.quiz_score !== null && app.quiz_score !== undefined}
-                                                <span
-                                                    class="text-xs font-semibold {app.quiz_passed
-                                                        ? 'text-emerald-600'
-                                                        : 'text-rose-600'}"
-                                                >
-                                                    {app.quiz_passed
-                                                        ? "✓ Passed"
-                                                        : "✕ Failed"} ({app.quiz_score}%)
+                                                <span class="text-xs font-semibold {app.quiz_passed ? 'text-emerald-600' : 'text-rose-600'}">
+                                                    {app.quiz_passed ? "✓ Passed" : "✕ Failed"} ({app.quiz_score}%)
                                                 </span>
                                             {:else}
-                                                <span
-                                                    class="text-xs text-amber-600 font-medium"
-                                                    >⏱ In Progress / Not Taken</span
-                                                >
+                                                <span class="text-xs text-amber-600 font-medium">⏱ In Progress</span>
                                             {/if}
                                         </td>
 
                                         <td class="text-slate-500 text-xs">
-                                            {app.created_at
-                                                ? new Date(
-                                                      app.created_at,
-                                                  ).toLocaleDateString()
-                                                : "N/A"}
+                                            {app.created_at ? new Date(app.created_at).toLocaleDateString() : "N/A"}
                                         </td>
 
                                         <td class="text-right">
                                             {#if app.status !== "accepted" && app.status !== "rejected"}
-                                                <button
-                                                    class="btn btn-xs btn-ghost text-emerald-600 hover:bg-emerald-50"
-                                                    on:click={() =>
-                                                        acceptApplication(
-                                                            app.id,
-                                                        )}
-                                                >
-                                                    <Check
-                                                        size={14}
-                                                        class="mr-1"
-                                                    /> Accept
+                                                <button class="btn btn-xs btn-ghost text-emerald-600 hover:bg-emerald-50" on:click={() => acceptApplication(app.id)}>
+                                                    <Check size={14} class="mr-1" /> Accept
                                                 </button>
                                             {/if}
                                         </td>

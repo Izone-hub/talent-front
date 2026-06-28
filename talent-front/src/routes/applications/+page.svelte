@@ -228,7 +228,7 @@
                         >
                             {#if ["submitted", "quiz_started", "quiz_completed"].includes(app.Status?.toLowerCase()) && app.QuizID && app.QuizID !== "00000000-0000-0000-0000-000000000000"}
                                 <a
-                                    href="/quizzes/{app.QuizID}"
+                                    href="/quizzes/{app.QuizID}?application_id={app.ID}&job_id={app.JobID}"
                                     class="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1"
                                 >
                                     View Quiz <ExternalLink size={12} />
