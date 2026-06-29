@@ -58,10 +58,10 @@
             const status = (app.Status || "submitted").toLowerCase();
 
             let tabGroup = "submitted";
-            if (["quiz_started", "quiz_completed"].includes(status))
+            if (["quiz_started"].includes(status))
                 tabGroup = "quizzes";
             else if (
-                ["under_review", "shortlisted", "interviewed"].includes(status)
+                ["quiz_completed", "under_review", "shortlisted", "interviewed"].includes(status)
             )
                 tabGroup = "in review";
             else if (["accepted", "rejected", "withdrawn"].includes(status))
@@ -226,14 +226,14 @@
                         <div
                             class="text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 flex-1 flex justify-start sm:justify-end"
                         >
-                            {#if ["submitted", "quiz_started", "quiz_completed"].includes(app.Status?.toLowerCase()) && app.QuizID && app.QuizID !== "00000000-0000-0000-0000-000000000000"}
+                            {#if ["submitted", "quiz_started"].includes(app.Status?.toLowerCase()) && app.QuizID && app.QuizID !== "00000000-0000-0000-0000-000000000000"}
                                 <a
                                     href="/quizzes/{app.QuizID}?application_id={app.ID}&job_id={app.JobID}"
                                     class="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1"
                                 >
                                     View Quiz <ExternalLink size={12} />
                                 </a>
-                            {:else if ["submitted", "quiz_started", "quiz_completed"].includes(app.Status?.toLowerCase())}
+                            {:else if ["submitted", "quiz_started"].includes(app.Status?.toLowerCase())}
                                 <span class="text-xs font-bold text-slate-400"
                                     >Quiz not assigned yet</span
                                 >
