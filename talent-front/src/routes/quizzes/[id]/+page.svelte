@@ -6,8 +6,8 @@
 
     // --- Svelte 5 Runes ---
     let currentAttemptId = $derived($page.params.id);
-    let appId = $derived($page.url.searchParams.get("application_id"));
-    let jobId = $derived($page.url.searchParams.get("job_id"));
+    let appId = $derived($page.url.searchParams.get("application_id") || sessionStorage.getItem("quiz_application_id"));
+    let jobId = $derived($page.url.searchParams.get("job_id") || sessionStorage.getItem("quiz_job_id"));
     let currentQuestion = $state(null);
     let answers = $state({}); // keep tracking local answer string
     let loading = $state(true);
@@ -20,6 +20,9 @@
             showToast("Missing runtime workspace parameter ID.", "error");
             loading = false;
             return;
+        }
+        if ($page.url.searchParams.has("application_id") || $page.url.searchParams.has("job_id")) {
+            history.replaceState({}, "", `/quizzes/${currentAttemptId}`);
         }
         await startAndFetchNextQuestion();
     });
