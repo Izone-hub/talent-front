@@ -19,6 +19,9 @@ export const quizService = {
     async saveAnswer(id, data) {
         return await apiClient.post(`/quizzes/${id}/answer`, data);
     },
+    async runCode(id, data) {
+        return await apiClient.post(`/quizzes/${id}/run-code`, data);
+    },
     async submitQuiz(id) {
         return await apiClient.post(`/quizzes/${id}/submit`);
     }

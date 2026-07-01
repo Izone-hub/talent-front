@@ -14,6 +14,27 @@
     let submitted = $state(false);
     let isFinished = $state(false);
     let debounceTimer;
+    let codeRunning = $state(false);
+    let codeResults = $state(null);
+    let codeOutput = $state("");
+    let selectedLanguage = $state("");
+    let selectedCodeTemplate = $state("");
+
+    const FUNCTION_LANGUAGES = [
+        { id: "python", name: "Python" },
+        { id: "javascript", name: "JavaScript" },
+        { id: "typescript", name: "TypeScript" },
+        { id: "go", name: "Go" },
+    ];
+
+    let questionLang = $derived(currentQuestion?.coding_details?.language || "");
+
+    const DEFAULT_TEMPLATES = {
+        python: `def solution(arr):\n    # write your code here\n    pass\n`,
+        javascript: `function solution(arr) {\n    // write your code here\n    return arr;\n}\n`,
+        typescript: `function solution(arr: number[]): number {\n    // write your code here\n    return 0;\n}\n`,
+        go: `package main\n\nfunc solution(arr []int) int {\n    // write your code here\n    return 0\n}\n`,
+    };
 
     onMount(async () => {
         if (!currentAttemptId) {
@@ -55,6 +76,16 @@
                 currentQuestion = res.data;
             } else if (res && Object.keys(res).length > 0) {
                 currentQuestion = res;
+                codeResults = null;
+                codeOutput = "";
+                const cd = res.coding_details;
+                if (cd && cd.language) {
+                    selectedLanguage = cd.language;
+                    selectedCodeTemplate = cd.code_template || DEFAULT_TEMPLATES[cd.language] || "";
+                } else {
+                    selectedLanguage = "";
+                    selectedCodeTemplate = "";
+                }
             } else {
                 currentQuestion = null;
                 isFinished = true;
@@ -104,6 +135,24 @@
         }
     }
 
+    async function skipQuestion() {
+        if (!currentQuestion) return;
+        const questionId = currentQuestion.id;
+        try {
+            const payload = {
+                question_id: questionId,
+                user_answer: answers[questionId] || "",
+                time_spent_seconds: 0,
+                is_skipped: true,
+            };
+            await quizService.saveAnswer(currentAttemptId, payload);
+            await loadNextQuestion();
+        } catch (error) {
+            console.error("Failed to skip question:", error);
+            showToast("Failed to skip question", "error");
+        }
+    }
+
     async function handleSubmitQuiz() {
         loading = true;
         try {
@@ -116,6 +165,79 @@
         } finally {
             loading = false;
         }
+    }
+
+    function onLanguageChange(lang) {
+        selectedLanguage = lang;
+        const qid = currentQuestion?.id;
+        if (qid && (!answers[qid] || answers[qid] === selectedCodeTemplate)) {
+            const tmpl = currentQuestion?.coding_details?.code_template || DEFAULT_TEMPLATES[lang] || "";
+            answers[qid] = tmpl;
+            selectedCodeTemplate = tmpl;
+        }
+    }
+
+    async function runCode() {
+        if (!currentQuestion || !answers[currentQuestion.id]) return;
+        codeRunning = true;
+        codeResults = null;
+        codeOutput = "";
+        try {
+            const res = await quizService.runCode(currentAttemptId, {
+                question_id: currentQuestion.id,
+                language: selectedLanguage,
+                code: answers[currentQuestion.id]
+            });
+            if (res && res.error) {
+                codeOutput = "Error: " + res.error;
+                return;
+            }
+            const stdout = res.stdout || "";
+            const stderr = res.stderr || "";
+            if (stderr) codeOutput = stderr;
+            codeResults = parseTestResults(stdout);
+        } catch (error) {
+            console.error("Run code error:", error);
+            codeOutput = "Execution error: " + (error.message || "Unknown error");
+        } finally {
+            codeRunning = false;
+        }
+    }
+
+    function parseTestResults(stdout) {
+        const lines = stdout.split("\n").filter(l => l.trim());
+        const results = [];
+        for (const line of lines) {
+            const match = line.match(/Test\s+(\d+):\s*(PASS|FAIL)/i);
+            if (match) {
+                results.push({
+                    index: parseInt(match[1]),
+                    passed: match[2].toUpperCase() === "PASS",
+                    output: line
+                });
+            }
+        }
+        return results.length > 0 ? results : null;
+    }
+
+    function getFuncSignature(template, lang) {
+        if (!template) return "";
+        const firstLine = template.trim().split("\n")[0];
+        const sig = firstLine.replace(/^def |^function |^fn |^fun /, "").replace(/\s*:\s*$/, "").replace(/\{#.*$/, "").trim();
+        if (sig && !sig.startsWith("//") && !sig.startsWith("#")) return sig;
+        return "";
+    }
+
+    function formatTcInput(tc) {
+        const val = tc.input ?? tc.args ?? "(no input)";
+        if (typeof val === "string") return val;
+        return JSON.stringify(val);
+    }
+
+    function formatTcOutput(tc) {
+        const val = tc.expected_output ?? tc.output ?? tc.expected ?? "(?)";
+        if (typeof val === "string") return val;
+        return JSON.stringify(val);
     }
 
     function parseOptions(optionsRaw) {
@@ -277,26 +399,95 @@
                     >ALGORITHM IMPLEMENTATION</span
                 >
                 <h2>{activeQuestion.question_text}</h2>
-                {#if activeQuestion.coding_details}
-                    <p class="lang-tag">
-                        Target Compilation: <code
-                            >{activeQuestion.coding_details.language}</code
+                <div class="coding-toolbar">
+                    <label class="lang-selector">
+                        <span>Language:</span>
+                        <select
+                            value={selectedLanguage}
+                            onchange={(e) => onLanguageChange(e.target.value)}
                         >
-                    </p>
-                {/if}
+                            <option value="" disabled>Select language</option>
+                            {#each FUNCTION_LANGUAGES as lang}
+                                <option value={lang.id}>{lang.name}</option>
+                            {/each}
+                        </select>
+                    </label>
+                    {#if questionLang}
+                        <span class="lang-badge">{questionLang}</span>
+                    {/if}
+                    {#if activeQuestion.coding_details?.test_cases?.length}
+                        <span class="test-count"
+                            >{activeQuestion.coding_details.test_cases.length} test(s)</span
+                        >
+                    {/if}
+                </div>
                 <textarea
+                    class="code-editor"
                     rows="14"
-                    placeholder="// Implement your strict logical matrix structures here..."
-                    value={answers[activeQuestion.id] ||
-                        activeQuestion.coding_details?.code_template ||
-                        ""}
-                    oninput={(e) =>
+                    placeholder="// Write your code here..."
+                    value={answers[activeQuestion.id] ??
+                        (selectedLanguage ? (activeQuestion.coding_details?.code_template || DEFAULT_TEMPLATES[selectedLanguage] || "") : "")}
+                    oninput={(e) => {
                         handleAnswerSelection(
                             activeQuestion.id,
                             e.target.value,
                             true,
-                        )}
+                        );
+                        codeResults = null;
+                        codeOutput = "";
+                    }}
                 />
+
+                {#if activeQuestion.coding_details?.test_cases?.length}
+                    <div class="test-cases">
+                        <div class="test-header">
+                            <span class="test-count">{activeQuestion.coding_details.test_cases.length} test case(s)</span>
+                            <span class="func-signature">{getFuncSignature(activeQuestion.coding_details.code_template, selectedLanguage)}</span>
+                        </div>
+                        <div class="test-list">
+                            {#each activeQuestion.coding_details.test_cases as tc, i}
+                                <div class="test-case">
+                                    <span class="test-num">#{i + 1}</span>
+                                    <code class="test-input">→ {formatTcInput(tc)}</code>
+                                    <code class="test-arrow">⇢</code>
+                                    <code class="test-expected">{formatTcOutput(tc)}</code>
+                                </div>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+
+                {#if codeResults}
+                    <div class="code-results">
+                        <h3>Execution Results</h3>
+                        <div class="results-grid">
+                            {#each codeResults as result, i}
+                                <div class="result-row" class:pass={result.passed} class:fail={!result.passed}>
+                                    <span class="result-indicator">{result.passed ? "✓" : "✗"}</span>
+                                    <span class="result-label">Test {i + 1}</span>
+                                    <span class="result-detail">{result.output || result.error || "passed"}</span>
+                                </div>
+                            {/each}
+                        </div>
+                        <div class="summary-row">
+                            Passed {codeResults.filter(r => r.passed).length} / {codeResults.length}
+                        </div>
+                    </div>
+                {/if}
+
+                {#if codeOutput}
+                    <pre class="code-output">{codeOutput}</pre>
+                {/if}
+
+                <div class="code-actions">
+                    <button
+                        class="btn-run"
+                        onclick={runCode}
+                        disabled={codeRunning || !answers[activeQuestion.id]}
+                    >
+                        {codeRunning ? "Running..." : "▶ Run Tests"}
+                    </button>
+                </div>
             </div>
         {/if}
 
@@ -349,7 +540,9 @@
         {/if}
 
         <div class="actions">
-            <div></div> <!-- empty spacer instead of previous button -->
+            <button class="btn-skip" onclick={skipQuestion}>
+                skip
+            </button>
             <button class="btn-primary" onclick={saveAnswerAndNext}>
                 Save Answer & Next
             </button>
@@ -429,6 +622,222 @@
     .badge.implementation {
         background: #eff6ff;
         color: #2563eb;
+    }
+    .coding-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .lang-selector {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: #475569;
+    }
+    .lang-selector select {
+        padding: 0.35rem 0.75rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        background: white;
+        cursor: pointer;
+        font-family: system-ui, sans-serif;
+    }
+    .lang-selector select:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+    .test-count {
+        color: #6366f1;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .lang-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 0.2rem 0.55rem;
+        background: #eef2ff;
+        color: #4338ca;
+        border-radius: 4px;
+        letter-spacing: 0.03em;
+    }
+    .code-editor {
+        width: 100%;
+        font-family: "Fira Code", "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+        font-size: 0.85rem;
+        line-height: 1.6;
+        padding: 1.25rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: #1e293b;
+        color: #e2e8f0;
+        tab-size: 4;
+        resize: vertical;
+        min-height: 280px;
+    }
+    .code-editor:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    .test-cases {
+        margin-top: 0.75rem;
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        border: 1px solid #e2e8f0;
+    }
+    .test-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .func-signature {
+        font-family: "Fira Code", "JetBrains Mono", monospace;
+        font-size: 0.78rem;
+        color: #6366f1;
+        background: #eef2ff;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+    }
+    .test-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .test-case {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.78rem;
+        padding: 0.35rem 0.5rem;
+        background: white;
+        border-radius: 4px;
+        border: 1px solid #e2e8f0;
+        font-family: "Fira Code", "JetBrains Mono", monospace;
+    }
+    .test-num {
+        color: #94a3b8;
+        font-weight: 600;
+        min-width: 1.5rem;
+    }
+    .test-input {
+        color: #334155;
+    }
+    .test-arrow {
+        color: #94a3b8;
+    }
+    .test-expected {
+        color: #6366f1;
+        font-weight: 600;
+    }
+    .code-actions {
+        margin-top: 1rem;
+    }
+    .btn-run {
+        background: #6366f1;
+        color: white;
+        border: none;
+        padding: 0.7rem 1.5rem;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+    }
+    .btn-run:hover:not(:disabled) {
+        background: #4f46e5;
+    }
+    .btn-run:disabled {
+        background: #94a3b8;
+        cursor: not-allowed;
+    }
+    .btn-skip {
+        background: transparent;
+        color: #64748b;
+        border: 1px solid #cbd5e1;
+        padding: 0.7rem 1.5rem;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-skip:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+        color: #334155;
+    }
+    .code-results {
+        margin-top: 1rem;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1rem;
+    }
+    .code-results h3 {
+        font-size: 0.9rem;
+        margin: 0 0 0.75rem 0;
+        color: #334155;
+    }
+    .results-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+    .result-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-family: monospace;
+    }
+    .result-row.pass {
+        background: #f0fdf4;
+        color: #15803d;
+    }
+    .result-row.fail {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    .result-indicator {
+        font-size: 1rem;
+        font-weight: 700;
+    }
+    .result-label {
+        font-weight: 600;
+        min-width: 4rem;
+    }
+    .result-detail {
+        color: #475569;
+        word-break: break-all;
+    }
+    .summary-row {
+        margin-top: 0.5rem;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #334155;
+        text-align: right;
+    }
+    .code-output {
+        margin-top: 0.75rem;
+        padding: 1rem;
+        background: #1e293b;
+        color: #fbbf24;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        font-family: monospace;
     }
     .options-grid {
         display: flex;
