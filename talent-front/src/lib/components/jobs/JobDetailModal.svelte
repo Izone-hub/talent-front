@@ -1,23 +1,50 @@
 <script>
-	/** @type {any} */
-	export let job = null;
-	export let modalId = "job-detail-modal";
-	export let loading = false;
 	import { Bookmark } from "@lucide/svelte";
 	import { auth } from "$lib/stores/authStore";
-	$: requirementsList = job?.requirements
-		? job.requirements
-				.split(",")
-				.map((r) => r.trim())
-				.filter((r) => r)
-		: [];
+	import { jobService } from "$lib/api/job.service";
+	import { showToast } from "$lib/stores/toast";
 
-	$: benefitsList = job?.benefits
-		? job.benefits
-				.split(",")
-				.map((b) => b.trim())
-				.filter((b) => b)
-		: [];
+	let { job = null, modalId = "job-detail-modal", loading = false } = $props();
+
+	let applying = $state(false);
+
+	let requirementsList = $derived(
+		job?.requirements
+			? job.requirements
+					.split(",")
+					.map((r) => r.trim())
+					.filter((r) => r)
+			: []
+	);
+
+	let benefitsList = $derived(
+		job?.benefits
+			? job.benefits
+					.split(",")
+					.map((b) => b.trim())
+					.filter((b) => b)
+			: []
+	);
+
+	async function handleApply() {
+		if (!job?.id || applying) return;
+
+		applying = true;
+		try {
+			const result = await jobService.applyForJob(job.id);
+			showToast(result.message || "Successfully applied for the job!", "success");
+		} catch (error) {
+			const message = error.message || "Failed to apply for the job";
+
+			if (message.toLowerCase().includes("already applied")) {
+				showToast(message, "warning");
+			} else {
+				showToast(message, "error");
+			}
+		} finally {
+			applying = false;
+		}
+	}
 </script>
 
 <input type="checkbox" id={modalId} class="modal-toggle" />
@@ -241,32 +268,40 @@
 			>
 				{#if $auth.isAuthenticated}
 					<button
+						onclick={handleApply}
+						disabled={applying}
 						class="
 						btn h-12 w-full rounded-lg
 						border border-indigo-600/90 bg-indigo-600 text-white
 						text-lg font-semibold
 						transition-all duration-300 sm:h-13 hover:bg-indigo-700
+						{applying ? 'pointer-events-none opacity-60' : ''}
 					"
 					>
-						Apply Now
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="ml-2 h-5 w-5"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M13 7l5 5m0 0l-5 5m5-5H6"
-							/>
-						</svg>
+						{#if applying}
+							<span class="loading loading-spinner loading-sm"></span>
+							Applying...
+						{:else}
+							Apply Now
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="ml-2 h-5 w-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M13 7l5 5m0 0l-5 5m5-5H6"
+								/>
+							</svg>
+						{/if}
 					</button>
 				{:else}
 					<button
-						on:click={() => auth.loginWithGithub()}
+						onclick={() => auth.loginWithGithub()}
 						class="
 						btn h-12 w-full rounded-lg
 						border border-indigo-600/90
