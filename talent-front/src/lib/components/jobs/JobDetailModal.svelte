@@ -1,5 +1,6 @@
 <script>
 	import { Bookmark } from "@lucide/svelte";
+	import { goto } from "$app/navigation";
 	import { auth } from "$lib/stores/authStore";
 	import { jobService } from "$lib/api/job.service";
 	import { showToast } from "$lib/stores/toast";
@@ -31,13 +32,15 @@
 
 		applying = true;
 		try {
-			const result = await jobService.applyForJob(job.id);
-			showToast(result.message || "Successfully applied for the job!", "success");
+			await jobService.applyForJob(job.id);
+			showToast("Successfully applied! Take the quiz to proceed.", "success");
+			goto("/applications");
 		} catch (error) {
 			const message = error.message || "Failed to apply for the job";
 
 			if (message.toLowerCase().includes("already applied")) {
 				showToast(message, "warning");
+				goto("/applications");
 			} else {
 				showToast(message, "error");
 			}
