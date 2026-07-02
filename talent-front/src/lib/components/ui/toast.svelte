@@ -3,7 +3,7 @@
 </script>
 
 {#if $toast.show}
-    <div class="toast toast-top toast-end z-50">
+    <div class="toast toast-top toast-end z-[100]">
         <div
             class="alert text-base-content"
             class:alert-success={$toast.type === "success"}
