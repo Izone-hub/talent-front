@@ -153,7 +153,7 @@
         </div>
         <button
             class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-6 shadow-none"
-            on:click={() => (isCreateModalOpen = true)}
+            onclick={() => (isCreateModalOpen = true)}
         >
             <Plus size={20} class="mr-2" />
             Post New Job
@@ -169,7 +169,7 @@
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
                 class:bg-white={currentTab === "published"}
                 class:text-purple-600={currentTab === "published"}
-                on:click={() => (currentTab = "published")}
+                onclick={() => (currentTab = "published")}
             >
                 Published
                 <!-- <span
@@ -183,7 +183,7 @@
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
                 class:bg-white={currentTab === "draft"}
                 class:text-purple-600={currentTab === "draft"}
-                on:click={() => (currentTab = "draft")}
+                onclick={() => (currentTab = "draft")}
             >
                 Drafts
             </button>
@@ -191,7 +191,7 @@
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
                 class:bg-white={currentTab === "closed"}
                 class:text-purple-600={currentTab === "closed"}
-                on:click={() => (currentTab = "closed")}
+                onclick={() => (currentTab = "closed")}
             >
                 Closed
             </button>
@@ -199,7 +199,7 @@
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
                 class:bg-white={currentTab === "archived"}
                 class:text-purple-600={currentTab === "archived"}
-                on:click={() => (currentTab = "archived")}
+                onclick={() => (currentTab = "archived")}
             >
                 Archived
             </button>
@@ -323,7 +323,7 @@
                                     <div class="dropdown dropdown-end">
                                         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                                         <button
-                                            on:click={() => openJobDetail(job)}
+                                            onclick={() => openJobDetail(job)}
                                             class="text-purple-600 text-sm"
                                         >
                                             Details
@@ -344,7 +344,7 @@
     isOpen={isCreateModalOpen}
     jobData={newJob}
     on:close={() => (isCreateModalOpen = false)}
-    on:submit={handleCreateJob}
+    onsubmit={handleCreateJob}
 />
 
 <JobDetailModal
