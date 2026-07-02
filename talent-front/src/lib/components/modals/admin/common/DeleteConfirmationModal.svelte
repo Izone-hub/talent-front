@@ -31,7 +31,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            on:click={close}
+            onclick={close}
             transition:fade={{ duration: 200 }}
         ></div>
 
@@ -72,7 +72,7 @@
                 <!-- Actions -->
                 <div class="flex flex-col gap-3">
                     <button
-                        on:click={confirm}
+                        onclick={confirm}
                         disabled={loading}
                         class="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-black text-sm uppercase tracking-[0.15em] shadow-lg shadow-rose-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -86,7 +86,7 @@
                         {/if}
                     </button>
                     <button
-                        on:click={close}
+                        onclick={close}
                         disabled={loading}
                         class="w-full py-4 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl font-black text-sm uppercase tracking-[0.15em] transition-all active:scale-[0.98] disabled:opacity-50"
                     >
@@ -98,7 +98,7 @@
             <!-- Decorative Elements -->
             <div class="absolute top-0 right-0 p-4">
                 <button
-                    on:click={close}
+                    onclick={close}
                     class="p-2 text-slate-300 hover:text-slate-500 transition-colors"
                 >
                     <X size={20} />
