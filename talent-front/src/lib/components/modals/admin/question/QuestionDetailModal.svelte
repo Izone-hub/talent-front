@@ -222,7 +222,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             class="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity duration-300"
-            on:click={close}
+            onclick={close}
         ></div>
 
         <!-- Modal -->
@@ -272,7 +272,7 @@
                 <div class="flex items-center gap-3">
                     {#if isEditing}
                         <button
-                            on:click={cancelEdit}
+                            onclick={cancelEdit}
                             class="p-2.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-2 px-4 shadow-sm"
                             disabled={isSaving}
                         >
@@ -280,7 +280,7 @@
                             <span class="text-sm font-bold">Cancel</span>
                         </button>
                         <button
-                            on:click={saveChanges}
+                            onclick={saveChanges}
                             class="p-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl transition-all flex items-center gap-2 px-6 shadow-lg shadow-emerald-100"
                             disabled={isSaving}
                         >
@@ -296,21 +296,21 @@
                         </button>
                     {:else}
                         <button
-                            on:click={handleEdit}
+                            onclick={handleEdit}
                             class="p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-all flex items-center gap-2 px-4"
                         >
                             <Edit2 size={18} />
                             <span class="text-sm font-bold">Edit</span>
                         </button>
                         <button
-                            on:click={() => (isDeleteModalOpen = true)}
+                            onclick={() => (isDeleteModalOpen = true)}
                             class="p-2.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-xl transition-all flex items-center justify-center"
                             title="Delete"
                         >
                             <Trash2 size={18} />
                         </button>
                         <button
-                            on:click={close}
+                            onclick={close}
                             class="p-2.5 bg-slate-50 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
                         >
                             <X size={20} />
@@ -359,7 +359,7 @@
                             </p>
                         </div>
                         <button
-                            on:click={loadQuestion}
+                            onclick={loadQuestion}
                             class="btn btn-primary bg-indigo-600 border-none rounded-xl px-10 font-bold"
                             >Try Again</button
                         >
@@ -693,7 +693,7 @@
                                                                 Options</span
                                                             >
                                                             <button
-                                                                on:click={addOption}
+                                                                onclick={addOption}
                                                                 class="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
                                                             >
                                                                 <Plus
@@ -740,7 +740,7 @@
                                                                 />
                                                                 {#if editableData.options.length > 1}
                                                                     <button
-                                                                        on:click={() =>
+                                                                        onclick={() =>
                                                                             removeOption(
                                                                                 i,
                                                                             )}
@@ -850,7 +850,7 @@
                                                     #{tag}
                                                     {#if isEditing}
                                                         <button
-                                                            on:click={() =>
+                                                            onclick={() =>
                                                                 removeTagEdit(
                                                                     tag,
                                                                 )}
@@ -877,7 +877,7 @@
                                                         bind:value={
                                                             tagSearchQuery
                                                         }
-                                                        on:focus={() =>
+                                                        onfocus={() =>
                                                             (showTagDropdown = true)}
                                                         placeholder="Add tags..."
                                                         class="bg-transparent border-none focus:ring-0 text-xs w-full py-1"
@@ -889,7 +889,7 @@
                                                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                                                     <div
                                                         class="fixed inset-0 z-20"
-                                                        on:click={() =>
+                                                        onclick={() =>
                                                             (showTagDropdown = false)}
                                                     ></div>
                                                     <div
@@ -898,7 +898,7 @@
                                                         {#each filteredAvailableTags as tag}
                                                             <button
                                                                 type="button"
-                                                                on:click={() =>
+                                                                onclick={() =>
                                                                     toggleTagEdit(
                                                                         tag.Name ||
                                                                             tag.name,
@@ -996,7 +996,7 @@
                 class="px-10 py-8 border-t border-slate-100 bg-white/80 backdrop-blur-md flex items-center justify-end gap-4 sticky bottom-0 z-30"
             >
                 <button
-                    on:click={close}
+                    onclick={close}
                     class="px-10 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-sm font-black shadow-xl shadow-slate-200 transition-all active:scale-95"
                 >
                     Close Portal
