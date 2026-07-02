@@ -113,7 +113,7 @@
 					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<li
 						class="list-row group cursor-pointer p-5 transition-colors hover:bg-slate-50"
-						on:click={() => openJobDetail(job)}
+                        onclick={() => openJobDetail(job)}
 					>
 						<!-- Main content area -->
 						<div class="list-col-grow justify-center">
