@@ -10,6 +10,7 @@
         CheckCircle2,
         XCircle,
         ChevronRight,
+        ChevronLeft,
         Loader2,
         Code2,
         Terminal,
@@ -17,7 +18,6 @@
         BarChart3,
         ArrowLeft,
         Send,
-        SkipForward,
     } from "@lucide/svelte";
 
     const quizId = $page.params.id;
@@ -36,6 +36,42 @@
     let isSubmitting = $state(false);
     let submitted = $state(false);
     let resultMessage = $state("");
+    let questionHistory = $state([]);
+    let historyIndex = $state(-1);
+
+    function getQuizQuestionCount() {
+        return quiz?.questions_per_quiz || quiz?.total_questions || 10;
+    }
+
+    function isLastQuestion() {
+        return questionNumber >= getQuizQuestionCount();
+    }
+
+    function snapshotCurrentQuestion() {
+        if (!question) return null;
+
+        return {
+            question,
+            selectedOption,
+            code,
+            codeOutput,
+        };
+    }
+
+    function persistCurrentQuestionState() {
+        if (historyIndex < 0 || !questionHistory[historyIndex]) return;
+
+        const updatedHistory = [...questionHistory];
+        updatedHistory[historyIndex] = snapshotCurrentQuestion();
+        questionHistory = updatedHistory;
+    }
+
+    function restoreQuestionState(entry) {
+        question = entry.question;
+        selectedOption = entry.selectedOption || "";
+        code = entry.code || "";
+        codeOutput = entry.codeOutput ?? null;
+    }
 
     function optionsList(q) {
         if (!q?.options) return [];
@@ -105,8 +141,23 @@
                 phase = "ready";
                 return;
             }
+
+            if (question) {
+                persistCurrentQuestionState();
+            }
+
+            const nextHistory = questionHistory.slice(0, historyIndex + 1);
+            nextHistory.push({
+                question: q,
+                selectedOption: "",
+                code: "",
+                codeOutput: null,
+            });
+
+            questionHistory = nextHistory;
+            historyIndex = nextHistory.length - 1;
             question = q;
-            questionNumber++;
+            questionNumber = historyIndex + 1;
             selectedOption = "";
             code = "";
             codeOutput = null;
@@ -122,31 +173,59 @@
         }
     }
 
-    async function saveAndNext() {
+    async function saveCurrentAnswer() {
         if (!question || isSaving) return;
         isSaving = true;
         try {
+            persistCurrentQuestionState();
             const answer = isCoding(question) ? code : (selectedOption || "");
             await quizService.saveAnswer(quizId, question.id, answer, 0, !selectedOption && !isCoding(question));
-            await loadNextQuestion();
+            return true;
         } catch (e) {
             showToast("Failed to save answer", "error");
+            return false;
         } finally {
             isSaving = false;
         }
     }
 
-    async function skipQuestion() {
-        if (!question || isSaving) return;
-        isSaving = true;
+    async function saveAndNext() {
+        const saved = await saveCurrentAnswer();
+        if (!saved) return;
+
         try {
-            await quizService.saveAnswer(quizId, question.id, "", 0, true);
             await loadNextQuestion();
         } catch (e) {
-            showToast("Failed to skip question", "error");
-        } finally {
-            isSaving = false;
+            showToast("Failed to save answer", "error");
         }
+    }
+
+    function goToPreviousQuestion() {
+        if (historyIndex <= 0 || isSaving || isSubmitting) return;
+
+        persistCurrentQuestionState();
+        const previousIndex = historyIndex - 1;
+        const previousEntry = questionHistory[previousIndex];
+        if (!previousEntry) return;
+
+        historyIndex = previousIndex;
+        questionNumber = previousIndex + 1;
+        restoreQuestionState(previousEntry);
+        phase = "active";
+    }
+
+    async function handlePrimaryAction() {
+        if (!question || isSaving) return;
+
+        const saved = await saveCurrentAnswer();
+        if (!saved) return;
+
+        if (isLastQuestion()) {
+            await submitQuiz();
+            return;
+        }
+
+        await loadNextQuestion();
     }
 
     async function runCode() {
@@ -219,6 +298,8 @@
             } else if (q && q.id) {
                 question = q;
                 questionNumber = 1;
+                questionHistory = [{ question: q, selectedOption: "", code: "", codeOutput: null }];
+                historyIndex = 0;
                 const details = codingDetails(q);
                 if (details?.code_template) {
                     code = details.code_template;
@@ -400,24 +481,29 @@
 
                 <!-- Actions -->
                 <div class="flex items-center justify-between">
-                    <span class="text-xs text-slate-400">Your answer is saved automatically on next</span>
+                    <span class="text-xs text-slate-400">Next saves your answer. Blank answers are treated as skipped.</span>
                     <div class="flex gap-2">
+                        {#if historyIndex > 0}
+                            <button
+                                onclick={goToPreviousQuestion}
+                                disabled={isSaving || isSubmitting}
+                                class="btn btn-ghost btn-sm gap-1.5 text-slate-500 hover:bg-slate-100"
+                            >
+                                <ChevronLeft class="h-3.5 w-3.5" />
+                                Previous
+                            </button>
+                        {/if}
                         <button
-                            onclick={skipQuestion}
+                            onclick={handlePrimaryAction}
                             disabled={isSaving}
-                            class="btn btn-ghost btn-sm gap-1.5 text-slate-500 hover:bg-slate-100"
-                        >
-                            <SkipForward class="h-3.5 w-3.5" />
-                            Skip
-                        </button>
-                        <button
-                            onclick={saveAndNext}
-                            disabled={isSaving || (!isCoding(question) && !selectedOption)}
                             class="btn btn-sm gap-1.5 border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
                         >
                             {#if isSaving}
                                 <Loader2 class="h-3.5 w-3.5 animate-spin" />
                                 Saving...
+                            {:else if isLastQuestion()}
+                                <Send class="h-3.5 w-3.5" />
+                                Submit Quiz
                             {:else}
                                 Next
                                 <ChevronRight class="h-3.5 w-3.5" />
