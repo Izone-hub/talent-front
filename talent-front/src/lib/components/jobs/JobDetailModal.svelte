@@ -3,6 +3,7 @@
 	import { goto } from "$app/navigation";
 	import { auth } from "$lib/stores/authStore";
 	import { jobService } from "$lib/api/job.service";
+	import { cvService } from "$lib/api/cv.service";
 	import { showToast } from "$lib/stores/toast";
 
 	let { job = null, modalId = "job-detail-modal", loading = false } = $props();
@@ -32,8 +33,21 @@
 
 		applying = true;
 		try {
-			await jobService.applyForJob(job.id);
+			// Check if user has a CV before applying
+			const currentCV = await cvService.getCurrentCV();
+			if (!currentCV) {
+				showToast("Please upload your CV before applying", "warning");
+				goto("/profile");
+				return;
+			}
+
+			const response = await jobService.applyForJob(job.id);
 			showToast("Successfully applied! Take the quiz to proceed.", "success");
+			if (response?.quiz_id) {
+				window.location.href = `http://localhost:5000/api/v1/quizzes/${response.quiz_id}/question`;
+				return;
+			}
+
 			goto("/applications");
 		} catch (error) {
 			const message = error.message || "Failed to apply for the job";
@@ -41,6 +55,9 @@
 			if (message.toLowerCase().includes("already applied")) {
 				showToast(message, "warning");
 				goto("/applications");
+			} else if (message.toLowerCase().includes("cv")) {
+				showToast("Please upload your CV before applying", "warning");
+				goto("/profile");
 			} else {
 				showToast(message, "error");
 			}
