@@ -60,7 +60,7 @@
         <!-- Sidebar Footer -->
         <div class="border-t border-gray-800 p-4">
             <button
-                on:click={() => auth.logout()}
+                onclick={() => auth.logout()}
                 class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-500"
             >
                 <LogOut size={20} />
@@ -74,7 +74,7 @@
 {#if isOpen}
     <button
         class="fixed inset-0 z-40 bg-black/50 md:hidden"
-        on:click={() => (isOpen = false)}
+        onclick={() => (isOpen = false)}
         aria-label="Close sidebar"
     ></button>
 {/if}
