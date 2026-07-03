@@ -33,10 +33,10 @@
 {:else if $auth.isAuthenticated && $auth.user?.role === "admin"}
 	<AdminLayout>
 		<slot />
-		<Toast />
 	</AdminLayout>
 {:else}
 	<DefaultLayout>
 		<slot />
 	</DefaultLayout>
 {/if}
+<Toast />
