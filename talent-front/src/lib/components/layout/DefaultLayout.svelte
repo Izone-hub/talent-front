@@ -1,7 +1,6 @@
 <script>
     import Navbar from "./Navbar.svelte";
     import Footer from "./Footer.svelte";
-    import Toast from "$lib/components/ui/toast.svelte";
     import { setContext } from "svelte";
 
     let x = 0;
@@ -34,7 +33,6 @@
 
     <main class="relative z-10 grow">
         <slot />
-        <Toast />
     </main>
 
     <Footer />
