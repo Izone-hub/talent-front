@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    import { goto } from "$app/navigation";
     import { auth } from "$lib/stores/authStore";
     import { cvService } from "$lib/api/cv.service";
     import {
@@ -98,6 +99,7 @@
 
             // Show success notification (if you have one)
             showToast("CV uploaded successfully!", "success");
+            goto("/jobs");
         } catch (error) {
             console.error("Error uploading CV:", error);
             showToast("Failed to upload CV: " + error.message, "error");
