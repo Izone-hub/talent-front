@@ -23,13 +23,8 @@ export const applicationService = {
      */
     acceptApplication: async (applicationId) => {
         try {
-            // TODO: Replace with actual backend endpoint when ready
-            // const response = await apiClient.post(`/applications/${applicationId}/accept`);
-            // return response;
-            
-            // Mock implementation
-            console.log('Mock: Accepting application', applicationId);
-            return { success: true, message: 'Application accepted' };
+            const response = await apiClient.patch(`/applications/${applicationId}/accept`);
+            return response;
         } catch (error) {
             console.error('Failed to accept application:', error);
             throw error;
@@ -41,15 +36,13 @@ export const applicationService = {
      * @param {string} applicationId - The application ID
      * @returns {Promise<Object>}
      */
-    rejectApplication: async (applicationId) => {
+    rejectApplication: async (applicationId, reason = '', feedback = '') => {
         try {
-            // TODO: Replace with actual backend endpoint when ready
-            // const response = await apiClient.post(`/applications/${applicationId}/reject`);
-            // return response;
-            
-            // Mock implementation
-            console.log('Mock: Rejecting application', applicationId);
-            return { success: true, message: 'Application rejected' };
+            const response = await apiClient.patch(`/applications/${applicationId}/reject`, {
+                reason,
+                feedback,
+            });
+            return response;
         } catch (error) {
             console.error('Failed to reject application:', error);
             throw error;
