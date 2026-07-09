@@ -491,7 +491,7 @@
     isOpen={isEditModalOpen}
     {job}
     on:close={() => (isEditModalOpen = false)}
-    onsubmit={handleEditSubmit}
+    on:submit={handleEditSubmit}
 />
 
 <style>
