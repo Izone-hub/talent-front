@@ -80,13 +80,13 @@
                 requirements: "",
                 responsibilities: "",
                 benefits: "",
-                job_type: "full-time",
-                experience_level: "entry",
+                job_type: "",
+                experience_level: "",
                 location: "",
                 remote_possible: false,
                 salary_min: null,
                 salary_max: null,
-                salary_currency: "USD",
+                salary_currency: "",
                 expires_at: "",
             };
             await loadJobs();
@@ -344,7 +344,7 @@
     isOpen={isCreateModalOpen}
     jobData={newJob}
     on:close={() => (isCreateModalOpen = false)}
-    onsubmit={handleCreateJob}
+    on:submit={handleCreateJob}
 />
 
 <JobDetailModal
