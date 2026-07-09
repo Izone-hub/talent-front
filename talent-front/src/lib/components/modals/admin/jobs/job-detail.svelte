@@ -167,7 +167,7 @@
 
                 <button
                     class="btn btn-ghost btn-circle btn-sm text-gray-400 hover:text-gray-700"
-                    on:click={close}
+                    onclick={close}
                 >
                     <XCircle size={22} />
                 </button>
@@ -274,11 +274,11 @@
                                                     >
                                                     <button
                                                         class="hover:bg-black/20 rounded-full p-0.5 transition-colors"
-                                                        on:click|stopPropagation={() =>
+                                                        onclick={(e) => { e.stopPropagation();
                                                             handleRemoveTag(
                                                                 tag.id ||
                                                                     tag.ID,
-                                                            )}
+                                                            )}}
                                                         title="Remove tag"
                                                         disabled={isLoadingAction}
                                                     >
@@ -411,7 +411,7 @@
                 <div class="flex items-center gap-3">
                     <button
                         class="btn btn-ghost rounded-lg font-bold text-gray-500"
-                        on:click={close}
+                        onclick={close}
                         disabled={isLoadingAction}
                     >
                         Close
@@ -420,14 +420,14 @@
                     {#if !job.status || job.status.toLowerCase() === "draft"}
                         <button
                             class="btn btn-outline border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300 rounded-lg font-bold"
-                            on:click={() => (isEditModalOpen = true)}
+                            onclick={() => (isEditModalOpen = true)}
                             disabled={isLoadingAction}
                         >
                             <Pencil size={18} /> Edit
                         </button>
                         <button
                             class="btn btn-outline border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 rounded-lg font-bold"
-                            on:click={handleArchive}
+                            onclick={handleArchive}
                             disabled={isLoadingAction}
                         >
                             {#if isLoadingAction}
@@ -439,7 +439,7 @@
                         </button>
                         <button
                             class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none rounded-lg shadow-lg shadow-purple-100 font-bold px-8"
-                            on:click={handlePublish}
+                            onclick={handlePublish}
                             disabled={isLoadingAction}
                         >
                             {#if isLoadingAction}
@@ -456,7 +456,7 @@
                     {#if job.status?.toLowerCase() === "published"}
                         <button
                             class="btn btn-outline border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 rounded-lg font-bold"
-                            on:click={handleClose}
+                            onclick={handleClose}
                             disabled={isLoadingAction}
                         >
                             {#if isLoadingAction}
@@ -468,7 +468,7 @@
                         </button>
                         <button
                             class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none rounded-lg shadow-lg shadow-purple-100 font-bold px-8"
-                            on:click={handleArchive}
+                            onclick={handleArchive}
                             disabled={isLoadingAction}
                         >
                             {#if isLoadingAction}

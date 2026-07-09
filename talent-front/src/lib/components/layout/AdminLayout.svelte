@@ -21,7 +21,7 @@
     <AdminSidebar bind:isOpen={isSidebarOpen} />
 
     <div class="flex flex-1 flex-col overflow-y-auto">
-        <!-- <AdminNavbar {toggleSidebar} /> -->
+        <AdminNavbar {toggleSidebar} />
 
         <main class="relative p-6">
             <slot />

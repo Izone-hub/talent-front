@@ -13,7 +13,7 @@
         <!-- Mobile Toggle -->
         <button
             class="btn btn-ghost btn-circle md:hidden"
-            on:click={toggleSidebar}
+            onclick={toggleSidebar}
             aria-label="Toggle Sidebar"
         >
             <svg
@@ -91,7 +91,7 @@
                 <div class="my-1 border-t border-gray-100"></div>
                 <li>
                     <button
-                        on:click={() => auth.logout()}
+                        onclick={() => auth.logout()}
                         class="flex items-center gap-2 text-error"
                     >
                         <LogOut size={16} /> Logout

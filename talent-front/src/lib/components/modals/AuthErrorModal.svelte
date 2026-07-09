@@ -30,7 +30,7 @@
                 <div class="mt-8">
                     <button
                         class="btn btn-primary w-full border-none bg-purple-600 hover:bg-purple-700 text-white"
-                        on:click={onClose}
+                        onclick={onClose}
                     >
                         Go Back Home
                     </button>

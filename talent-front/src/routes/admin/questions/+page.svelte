@@ -232,7 +232,7 @@
         <div class="flex items-center gap-3">
             <button
                 class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-6 shadow-none"
-                on:click={() => (isCreateModalOpen = true)}
+                onclick={() => (isCreateModalOpen = true)}
             >
                 <Plus size={18} />
                 Create Question
@@ -321,7 +321,7 @@
                                 type="checkbox"
                                 class="checkbox checkbox-xs border-gray-300 focus:ring-indigo-500 rounded text-indigo-600"
                                 checked={allSelected}
-                                on:change={toggleSelectAll}
+                                onchange={toggleSelectAll}
                             />
                         </th>
                         <th class="px-4 py-4 min-w-[300px]">Question</th>
@@ -389,7 +389,7 @@
                                         type="checkbox"
                                         class="checkbox checkbox-xs border-gray-300 focus:ring-indigo-500 rounded text-indigo-600"
                                         checked={selectedIds.has(q.id)}
-                                        on:change={() => toggleSelect(q.id)}
+                                        onchange={() => toggleSelect(q.id)}
                                     />
                                 </td>
                                 <td class="px-4 py-5">
@@ -503,7 +503,7 @@
                                         <button
                                             class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                                             title="View details"
-                                            on:click={() =>
+                                            onclick={() =>
                                                 openDetailModal(q.id)}
                                         >
                                             <Eye size={18} />
@@ -511,7 +511,7 @@
                                         <button
                                             class="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                                             title="Delete question"
-                                            on:click={() =>
+                                            onclick={() =>
                                                 openDeleteModal(q.id)}
                                         >
                                             <Trash2 size={18} />
@@ -545,7 +545,7 @@
                         </span>
                         <button
                             class="text-[10px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 transition-colors uppercase tracking-wider"
-                            on:click={openBulkDeleteModal}
+                            onclick={openBulkDeleteModal}
                         >
                             Delete selected
                         </button>

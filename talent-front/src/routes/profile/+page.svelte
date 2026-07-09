@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    import { goto } from "$app/navigation";
     import { auth } from "$lib/stores/authStore";
     import { cvService } from "$lib/api/cv.service";
     import {
@@ -98,6 +99,7 @@
 
             // Show success notification (if you have one)
             showToast("CV uploaded successfully!", "success");
+            goto("/jobs");
         } catch (error) {
             console.error("Error uploading CV:", error);
             showToast("Failed to upload CV: " + error.message, "error");
@@ -153,7 +155,7 @@
                     professional profile.
                 </p>
                 <button
-                    on:click={() => auth.loginWithGithub()}
+                    onclick={() => auth.loginWithGithub()}
                     class="btn btn-primary w-full border-none bg-purple-600 hover:bg-purple-700 text-white"
                 >
                     <Github class="h-4 w-4" />
@@ -410,7 +412,7 @@
                                                     class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                                                 >
                                                     <button
-                                                        on:click={() =>
+                                                        onclick={() =>
                                                             downloadCV(
                                                                 currentCV.id,
                                                             )}
@@ -431,7 +433,7 @@
                                             type="file"
                                             id="cv-upload"
                                             accept=".pdf,.doc,.docx"
-                                            on:change={handleCVUpload}
+                                            onchange={handleCVUpload}
                                             class="hidden"
                                             disabled={isLoading}
                                         />
@@ -525,7 +527,7 @@
                                                             class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                                                         >
                                                             <button
-                                                                on:click={() =>
+                                                                onclick={() =>
                                                                     downloadCV(
                                                                         version.id,
                                                                     )}
@@ -537,10 +539,10 @@
                                                                 />
                                                             </button>
                                                             <button
-                                                                on:click={() =>
-                                                                    deleteCV(
-                                                                        version.id,
-                                                                    )}
+                                                            onclick={() =>
+                                                                deleteCV(
+                                                                    version.id,
+                                                                )}
                                                                 class="btn btn-ghost btn-xs text-slate-400 hover:text-rose-600"
                                                                 title="Delete"
                                                             >

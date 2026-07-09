@@ -9,7 +9,7 @@
 </script>
 
 <nav
-	class="sticky top-0 z-50 w-full border-b border-gray-200 bg-gray-50 opacity-90"
+	class="sticky top-0 z-80 w-full border-b border-gray-200 bg-gray-50 opacity-90"
 >
 	<div
 		class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
