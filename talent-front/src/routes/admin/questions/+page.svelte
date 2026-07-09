@@ -581,7 +581,7 @@
 <CreateQuestionModal
     isOpen={isCreateModalOpen}
     on:close={() => (isCreateModalOpen = false)}
-    onsubmit={handleCreateQuestion}
+    on:submit={handleCreateQuestion}
 />
 
 <QuestionDetailModal
