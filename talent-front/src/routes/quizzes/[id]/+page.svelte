@@ -1,5 +1,5 @@
 <script>
-    import { onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
     import { auth } from "$lib/stores/authStore";
@@ -10,7 +10,6 @@
         CheckCircle2,
         XCircle,
         ChevronRight,
-        ChevronLeft,
         Loader2,
         Code2,
         Terminal,
@@ -18,6 +17,8 @@
         BarChart3,
         ArrowLeft,
         Send,
+        Timer,
+        TimerOff,
     } from "@lucide/svelte";
 
     const quizId = $page.params.id;
@@ -38,6 +39,8 @@
     let resultMessage = $state("");
     let questionHistory = $state([]);
     let historyIndex = $state(-1);
+    let timeRemaining = $state(0);
+    let timerInterval = null;
 
     function getQuizQuestionCount() {
         return quiz?.questions_per_quiz || quiz?.total_questions || 10;
@@ -55,6 +58,7 @@
             selectedOption,
             code,
             codeOutput,
+            timeRemaining,
         };
     }
 
@@ -71,6 +75,7 @@
         selectedOption = entry.selectedOption || "";
         code = entry.code || "";
         codeOutput = entry.codeOutput ?? null;
+        timeRemaining = entry.timeRemaining ?? entry.question?.time_limit_seconds ?? 0;
     }
 
     function optionsList(q) {
@@ -116,6 +121,48 @@
         return map[d] || "badge-ghost";
     }
 
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    function startTimer() {
+        stopTimer();
+        if (!question || phase !== "active") return;
+
+        const limit = question.time_limit_seconds;
+        if (!limit || limit <= 0) return;
+
+        if (timeRemaining <= 0) {
+            timeRemaining = limit;
+        }
+
+        timerInterval = setInterval(() => {
+            timeRemaining--;
+
+            if (timeRemaining <= 0) {
+                stopTimer();
+                handleTimeUp();
+            }
+        }, 1000);
+    }
+
+    async function handleTimeUp() {
+        if (isSaving || isSubmitting) return;
+
+        showToast("Time's up! Moving to next question.", "warning");
+        if (isLastQuestion()) {
+            const saved = await saveCurrentAnswer();
+            if (saved) {
+                await submitQuiz();
+            }
+        } else {
+            await saveAndNext();
+        }
+    }
+
     async function startQuiz() {
         phase = "starting";
         try {
@@ -132,6 +179,7 @@
         try {
             const q = await quizService.getQuestion(quizId);
             if (q && q.status === "finished") {
+                stopTimer();
                 question = null;
                 resultMessage = q.message || "Quiz complete!";
                 phase = "finished";
@@ -152,6 +200,7 @@
                 selectedOption: "",
                 code: "",
                 codeOutput: null,
+                timeRemaining: q.time_limit_seconds || 0,
             });
 
             questionHistory = nextHistory;
@@ -161,10 +210,12 @@
             selectedOption = "";
             code = "";
             codeOutput = null;
+            timeRemaining = q.time_limit_seconds || 0;
             const details = codingDetails(q);
             if (details?.code_template) {
                 code = details.code_template;
             }
+            startTimer();
         } catch (e) {
             showToast("Failed to load question", "error");
             if (questionNumber === 0) {
@@ -177,9 +228,12 @@
         if (!question || isSaving) return;
         isSaving = true;
         try {
+            const timeSpent = question.time_limit_seconds > 0
+                ? question.time_limit_seconds - timeRemaining
+                : 0;
             persistCurrentQuestionState();
             const answer = isCoding(question) ? code : (selectedOption || "");
-            await quizService.saveAnswer(quizId, question.id, answer, 0, !selectedOption && !isCoding(question));
+            await quizService.saveAnswer(quizId, question.id, answer, timeSpent, !selectedOption && !isCoding(question));
             return true;
         } catch (e) {
             showToast("Failed to save answer", "error");
@@ -200,25 +254,15 @@
         }
     }
 
-    function goToPreviousQuestion() {
-        if (historyIndex <= 0 || isSaving || isSubmitting) return;
-
-        persistCurrentQuestionState();
-        const previousIndex = historyIndex - 1;
-        const previousEntry = questionHistory[previousIndex];
-        if (!previousEntry) return;
-
-        historyIndex = previousIndex;
-        questionNumber = previousIndex + 1;
-        restoreQuestionState(previousEntry);
-        phase = "active";
-    }
-
     async function handlePrimaryAction() {
         if (!question || isSaving) return;
 
+        stopTimer();
         const saved = await saveCurrentAnswer();
-        if (!saved) return;
+        if (!saved) {
+            startTimer();
+            return;
+        }
 
         if (isLastQuestion()) {
             await submitQuiz();
@@ -273,6 +317,30 @@
         selectedOption = selectedOption === val ? "" : val;
     }
 
+    function formatTime(s) {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`;
+    }
+
+    function timerClass() {
+        if (!question?.time_limit_seconds || question.time_limit_seconds <= 0) return "";
+        if (timeRemaining <= 10) return "border-red-300 bg-red-50 text-red-700";
+        if (timeRemaining <= 30) return "border-amber-300 bg-amber-50 text-amber-700";
+        return "border-amber-200 bg-amber-50 text-amber-700";
+    }
+
+    function timerIconClass() {
+        if (!question?.time_limit_seconds || question.time_limit_seconds <= 0) return "";
+        if (timeRemaining <= 10) return "text-red-500";
+        if (timeRemaining <= 30) return "text-amber-600";
+        return "text-amber-500";
+    }
+
+    onDestroy(() => {
+        stopTimer();
+    });
+
     onMount(async () => {
         if (!$auth.isAuthenticated) {
             goto("/auth");
@@ -298,13 +366,15 @@
             } else if (q && q.id) {
                 question = q;
                 questionNumber = 1;
-                questionHistory = [{ question: q, selectedOption: "", code: "", codeOutput: null }];
+                timeRemaining = q.time_limit_seconds || 0;
+                questionHistory = [{ question: q, selectedOption: "", code: "", codeOutput: null, timeRemaining: q.time_limit_seconds || 0 }];
                 historyIndex = 0;
                 const details = codingDetails(q);
                 if (details?.code_template) {
                     code = details.code_template;
                 }
                 phase = "active";
+                startTimer();
             } else {
                 phase = "ready";
             }
@@ -343,7 +413,7 @@
                     </span>
                     <span class="flex items-center gap-1.5">
                         <Clock class="h-4 w-4" />
-                        No time limit
+                        Per-question timer
                     </span>
                 </div>
                 <button
@@ -365,7 +435,24 @@
             <div class="space-y-4">
                 <!-- Progress -->
                 <div class="flex items-center justify-between text-sm text-slate-500">
-                    <span>Question {questionNumber}</span>
+                    <div class="flex items-center gap-3">
+                        <span>Question {questionNumber}</span>
+                        {#if question.time_limit_seconds > 0}
+                            <span class="badge badge-outline gap-1.5 px-3 py-2 text-xs font-bold {timerClass()}">
+                                {#if timeRemaining <= 10}
+                                    <Timer class="h-3.5 w-3.5 animate-pulse {timerIconClass()}" />
+                                {:else}
+                                    <Timer class="h-3.5 w-3.5 {timerIconClass()}" />
+                                {/if}
+                                {formatTime(timeRemaining)}
+                            </span>
+                        {:else}
+                            <span class="badge badge-outline gap-1 border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-500">
+                                <TimerOff class="h-3 w-3" />
+                                No limit
+                            </span>
+                        {/if}
+                    </div>
                     <span class="badge {difficultyColor(question.difficulty)} badge-sm">
                         {question.difficulty || "mixed"}
                     </span>
@@ -483,16 +570,6 @@
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-slate-400">Next saves your answer. Blank answers are treated as skipped.</span>
                     <div class="flex gap-2">
-                        {#if historyIndex > 0}
-                            <button
-                                onclick={goToPreviousQuestion}
-                                disabled={isSaving || isSubmitting}
-                                class="btn btn-ghost btn-sm gap-1.5 text-slate-500 hover:bg-slate-100"
-                            >
-                                <ChevronLeft class="h-3.5 w-3.5" />
-                                Previous
-                            </button>
-                        {/if}
                         <button
                             onclick={handlePrimaryAction}
                             disabled={isSaving}
