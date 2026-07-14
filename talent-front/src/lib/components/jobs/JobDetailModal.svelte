@@ -6,7 +6,7 @@
 	import { cvService } from "$lib/api/cv.service";
 	import { showToast } from "$lib/stores/toast";
 
-	let { job = null, modalId = "job-detail-modal", loading = false } = $props();
+	let { job = null, modalId = "job-detail-modal", loading = false, isApplied = false } = $props();
 
 	let applying = $state(false);
 
@@ -286,7 +286,27 @@
         pb-6 sm:px-8
       "
 			>
-				{#if $auth.isAuthenticated}
+				{#if isApplied}
+					<div
+						class="btn h-12 w-full cursor-default rounded-lg border border-sky-200 bg-sky-50 text-lg font-semibold text-sky-600 sm:h-13"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-5 w-5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+						You have Applied
+					</div>
+				{:else if $auth.isAuthenticated}
 					<button
 						onclick={handleApply}
 						disabled={applying}
