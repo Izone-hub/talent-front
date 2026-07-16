@@ -20,6 +20,8 @@
         Timer,
         TimerOff,
     } from "@lucide/svelte";
+    import SkeletonQuiz from "$lib/components/ui/SkeletonQuiz.svelte";
+    import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
 
     const quizId = $page.params.id;
     const applicationId = $page.url.searchParams.get("application_id");
@@ -389,8 +391,8 @@
 
         <!-- Loading -->
         {#if phase === "loading"}
-            <div class="flex items-center justify-center py-32">
-                <Loader2 class="h-10 w-10 animate-spin text-indigo-600" />
+            <div class="py-8">
+                <SkeletonQuiz />
             </div>
 
         <!-- Ready / Start Screen -->
@@ -544,17 +546,9 @@
                                     <Terminal class="h-3.5 w-3.5" />
                                     Output
                                     {#if codeOutput.passed !== undefined}
-                                        {#if codeOutput.passed}
-                                            <span class="ml-auto flex items-center gap-1 text-emerald-600">
-                                                <CheckCircle2 class="h-3.5 w-3.5" />
-                                                Passed
-                                            </span>
-                                        {:else}
-                                            <span class="ml-auto flex items-center gap-1 text-red-600">
-                                                <XCircle class="h-3.5 w-3.5" />
-                                                Failed
-                                            </span>
-                                        {/if}
+                                        <span class="ml-auto">
+                                            <PassFailBadge score={codeOutput.passed ? 100 : 0} passingThreshold={50} size="sm" />
+                                        </span>
                                     {/if}
                                 </div>
                                 <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-300"><code>{codeOutput.stdout || codeOutput.stderr || "No output"}</code></pre>
