@@ -2,6 +2,8 @@
 	import { onMount } from "svelte";
 	import JobDetailModal from "$lib/components/jobs/JobDetailModal.svelte";
 	import { jobService } from "$lib/api/job.service";
+	import SkeletonCard from "$lib/components/ui/SkeletonCard.svelte";
+	import EmptyState from "$lib/components/ui/EmptyState.svelte";
 	let { data } = $props();
 
 	/** @type {any[]} */
@@ -140,36 +142,12 @@
 				</li>
 
 				{#if isLoadingJobs}
-					<li class="flex items-center justify-center py-20">
-						<span class="loading loading-spinner loading-lg text-indigo-600"></span>
+					<li class="p-3">
+						<SkeletonCard count={5} variant="list-item" />
 					</li>
 				{:else if jobs.length === 0}
-					<li class="col-span-full py-20 text-center text-slate-500">
-						<div
-							class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 transition-transform hover:scale-105"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-10 w-10 text-slate-400"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-								/>
-							</svg>
-						</div>
-						<h3 class="text-xl font-bold text-slate-800">
-							No jobs found
-						</h3>
-						<p class="mt-1 text-slate-500">
-							We couldn't find any job openings matching your
-							criteria.
-						</p>
+					<li>
+						<EmptyState title="No jobs found" description="We couldn't find any job openings matching your criteria." />
 					</li>
 				{:else}
 					{#each jobs as job (job.id)}
