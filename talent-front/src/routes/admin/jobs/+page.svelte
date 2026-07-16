@@ -14,6 +14,8 @@
         Filter,
         XCircle,
     } from "lucide-svelte";
+    import PageLoader from "$lib/components/ui/PageLoader.svelte";
+    import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import { showToast } from "$lib/stores/toast";
     import CreateJobModal from "$lib/components/modals/admin/jobs/CreateJobModal.svelte";
     import JobDetailModal from "$lib/components/modals/admin/jobs/job-detail.svelte";
@@ -222,29 +224,15 @@
     <!-- Jobs List -->
     <div class="bg-white rounded-lg border border-gray-100 overflow-hidden">
         {#if loading}
-            <div class="flex flex-col items-center justify-center py-24 gap-4">
-                <span class="loading loading-spinner loading-lg text-purple-600"
-                ></span>
-                <span class="text-gray-400 font-medium tracking-wide"
-                    >Fetching your job data...</span
-                >
-            </div>
+            <PageLoader message="Fetching your job data..." />
         {:else if filteredJobs.length === 0}
-            <div class="py-24 text-center">
-                <div
-                    class="inline-flex items-center justify-center w-20 h-20 bg-gray-50 text-gray-300 rounded-full mb-4"
-                >
-                    <Briefcase size={32} />
-                </div>
-                <h3 class="text-lg font-semibold text-gray-900">
-                    No jobs found
-                </h3>
-                <p class="text-gray-500 max-w-xs mx-auto mt-2">
-                    {searchQuery
-                        ? "We couldn't find any jobs matching your search."
-                        : "Start by posting your first job opportunity to attract talent."}
-                </p>
-            </div>
+            <EmptyState
+                icon={Briefcase}
+                title="No jobs found"
+                description={searchQuery
+                    ? "We couldn't find any jobs matching your search."
+                    : "Start by posting your first job opportunity to attract talent."}
+            />
         {:else}
             <div class="overflow-x-auto">
                 <table class="table table-lg">
