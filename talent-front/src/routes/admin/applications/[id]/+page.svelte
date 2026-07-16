@@ -3,6 +3,9 @@
 	import { applicationService } from "$lib/api/application.service";
 	import { intelligenceService } from "$lib/api/intelligence.service";
 	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, Check, X } from "lucide-svelte";
+	import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
+	import PageLoader from "$lib/components/ui/PageLoader.svelte";
+	import ButtonLoader from "$lib/components/ui/ButtonLoader.svelte";
 	import { showToast } from "$lib/stores/toast";
 	import { goto } from "$app/navigation";
 
@@ -148,10 +151,7 @@
 <div class="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-purple-50/40 text-slate-900">
 	<div class="mx-auto w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
 		{#if loading}
-			<div class="flex min-h-[70vh] flex-col items-center justify-center gap-3 rounded-3xl border border-white/70 bg-white/80 shadow-sm backdrop-blur">
-				<span class="loading loading-spinner loading-lg text-purple-600"></span>
-				<span class="text-sm text-slate-500">Loading application details...</span>
-			</div>
+			<PageLoader message="Loading application details..." />
 		{:else if !application}
 			<div class="flex min-h-[70vh] items-center justify-center rounded-3xl border border-white/70 bg-white/80 p-12 text-center shadow-sm backdrop-blur">
 				<div class="max-w-md space-y-4">
@@ -241,9 +241,7 @@
 								<div class="mt-6 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-purple-50 via-white to-blue-50 p-5 sm:p-6">
 									<div class="mb-4 flex items-center justify-between">
 										<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Quiz Results</h2>
-										<span class="badge badge-lg {getVal(application, 'QuizPassed', 'quiz_passed') ? 'badge-success' : 'badge-error'} border-none px-3 py-2 font-medium">
-											{getVal(application, 'QuizPassed', 'quiz_passed') ? 'Passed' : 'Failed'}
-										</span>
+										<PassFailBadge score={getVal(application, 'QuizScore', 'quiz_score') || 0} passingThreshold={50} />
 									</div>
 									<div class="grid gap-4 md:grid-cols-2">
 										<div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
@@ -306,30 +304,25 @@
 							<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</h2>
 						</div>
 						<div class="space-y-3 p-6">
-							<button
-								onclick={rejectApplication}
-								class="btn btn-error btn-block gap-2"
+							<ButtonLoader
+								loading={isProcessing}
 								disabled={isProcessing || (application.Status || application.status) === 'rejected'}
+								onclick={rejectApplication}
+								color="error"
+								variant="outline"
 							>
-								{#if isProcessing}
-									<span class="loading loading-spinner loading-sm"></span>
-								{:else}
-									<X size={18} />
-								{/if}
+								<X size={18} />
 								Reject Application
-							</button>
-							<button
-								onclick={acceptApplication}
-								class="btn btn-success btn-block gap-2"
+							</ButtonLoader>
+							<ButtonLoader
+								loading={isProcessing}
 								disabled={isProcessing || (application.Status || application.status) === 'accepted'}
+								onclick={acceptApplication}
+								color="success"
 							>
-								{#if isProcessing}
-									<span class="loading loading-spinner loading-sm"></span>
-								{:else}
-									<Check size={18} />
-								{/if}
+								<Check size={18} />
 								Accept Application
-							</button>
+							</ButtonLoader>
 						</div>
 					</div>
 
