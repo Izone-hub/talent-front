@@ -1,6 +1,8 @@
 <script>
     import { Plus, Edit, Trash2 } from "lucide-svelte";
     import { tagService } from "$lib/api/tag.service";
+    import PageLoader from "$lib/components/ui/PageLoader.svelte";
+    import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import CreateTagModal from "$lib/components/modals/admin/tag/createTag.svelte";
     import EditTagModal from "$lib/components/modals/admin/tag/editTag.svelte";
     import DeleteConfirmationModal from "$lib/components/modals/admin/tag/deletComfirmation.svelte";
@@ -46,13 +48,9 @@
     <!-- tag list -->
     <div class="bg-white rounded-lg border border-gray-100 overflow-hidden">
         {#if loading}
-            <div class="flex flex-col items-center justify-center py-24 gap-4">
-                <span class="loading loading-spinner loading-lg text-purple-600"
-                ></span>
-                <span class="text-gray-400 font-medium tracking-wide"
-                    >Fetching Tags data...</span
-                >
-            </div>
+            <PageLoader message="Fetching Tags data..." />
+        {:else if tags.length === 0}
+            <EmptyState title="No tags found" description="Create your first tag!" />
         {:else}
             <div
                 class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100"
@@ -133,15 +131,6 @@
                     </tbody>
                 </table>
             </div>
-
-            <!-- Optional: Show empty state -->
-            {#if tags.length === 0}
-                <div class="text-center py-12">
-                    <p class="text-gray-400">
-                        No tags found. Create your first tag!
-                    </p>
-                </div>
-            {/if}
         {/if}
     </div>
 </div>
