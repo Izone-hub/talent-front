@@ -17,6 +17,7 @@
         AlertTriangle,
         X,
     } from "@lucide/svelte";
+    import PageLoader from "$lib/components/ui/PageLoader.svelte";
 
     let applications = $state([]);
     let isLoading = $state(true);
@@ -110,9 +111,7 @@
         </div>
 
         {#if isLoading}
-            <div class="flex items-center justify-center py-20">
-                <Loader2 class="h-8 w-8 animate-spin text-indigo-600" />
-            </div>
+            <PageLoader message="Loading your applications..." />
         {:else if applications.length === 0}
             <div class="rounded-2xl border border-slate-200 bg-white py-20 text-center">
                 <Briefcase class="mx-auto mb-4 h-12 w-12 text-slate-300" />
