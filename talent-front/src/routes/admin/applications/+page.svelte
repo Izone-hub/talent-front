@@ -2,6 +2,9 @@
     import { jobService } from "$lib/api/job.service";
     import { applicationService } from "$lib/api/application.service";
     import { Users } from "lucide-svelte";
+    import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
+    import PageLoader from "$lib/components/ui/PageLoader.svelte";
+    import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import { showToast } from "$lib/stores/toast";
     import { goto } from "$app/navigation";
 
@@ -136,20 +139,13 @@
                 <p class="text-gray-500 text-sm mt-1">Choose a job from the dropdown above to view its applicants.</p>
             </div>
         {:else if loading}
-            <div class="flex flex-col items-center justify-center py-20 gap-3">
-                <span class="loading loading-spinner loading-lg text-purple-600"></span>
-                <span class="text-gray-400 text-sm">Loading applications...</span>
-            </div>
+            <PageLoader message="Loading applications..." />
         {:else if applications.length === 0}
-            <div class="py-16 text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-50 text-gray-300 rounded-full mb-3">
-                    <Users size={28} />
-                </div>
-                <h3 class="text-base font-semibold text-gray-900">No finished quizzes yet</h3>
-                <p class="text-gray-500 text-sm mt-1">
-                    Only applicants who finished the quiz appear for <span class="font-medium text-gray-700">{selectedJob.title || selectedJob.Title}</span>.
-                </p>
-            </div>
+            <EmptyState
+                icon={Users}
+                title="No finished quizzes yet"
+                description={"Only applicants who finished the quiz appear for " + (selectedJob.title || selectedJob.Title) + "."}
+            />
         {:else}
             <div class="px-4 py-3 border-b border-gray-100 bg-gray-50/30">
                 <h3 class="text-sm font-semibold text-gray-700">
@@ -208,9 +204,7 @@
                                 </td>
                                 <td>
                                     {#if app.QuizScore != null || app.quiz_score != null}
-                                        <span class="badge badge-sm {getVal(app, 'QuizPassed', 'quiz_passed') ? 'badge-success' : 'badge-ghost'} gap-1 font-medium">
-                                            {getVal(app, 'QuizScore', 'quiz_score')}/100
-                                        </span>
+                                        <PassFailBadge score={getVal(app, 'QuizScore', 'quiz_score') || 0} passingThreshold={50} showScore size="sm" />
                                     {:else}
                                         <span class="text-gray-300">—</span>
                                     {/if}
