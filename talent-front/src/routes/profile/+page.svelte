@@ -9,6 +9,7 @@
         formatRelativeTime,
     } from "$lib/utils/dateFormatter";
     import { showToast } from "$lib/stores/toast";
+    import GlobalLoadingOverlay from "$lib/components/ui/GlobalLoadingOverlay.svelte";
     import {
         Upload,
         Github,
@@ -130,18 +131,10 @@
     }
 </script>
 
+<GlobalLoadingOverlay show={$auth.loading} message="Syncing with GitHub..." />
+
 <div class="min-h-screen bg-slate-50 font-sans">
-    {#if $auth.loading}
-        <div class="flex h-screen w-full items-center justify-center">
-            <div class="flex flex-col items-center gap-4">
-                <span class="loading loading-spinner loading-lg text-indigo-600"
-                ></span>
-                <p class="text-sm font-medium text-slate-500 italic">
-                    Syncing with GitHub...
-                </p>
-            </div>
-        </div>
-    {:else if !$auth.isAuthenticated}
+    {#if !$auth.isAuthenticated}
         <div class="flex h-screen w-full items-center justify-center">
             <div
                 class="text-center p-8 bg-white border border-slate-200 rounded-2xl shadow-sm max-w-md"
