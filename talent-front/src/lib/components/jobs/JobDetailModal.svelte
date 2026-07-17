@@ -4,11 +4,42 @@
 	import { auth } from "$lib/stores/authStore";
 	import { jobService } from "$lib/api/job.service";
 	import { cvService } from "$lib/api/cv.service";
+	import { savedJobService } from "$lib/api/savedJob.service";
 	import { showToast } from "$lib/stores/toast";
 
 	let { job = null, modalId = "job-detail-modal", loading = false, isApplied = false } = $props();
 
 	let applying = $state(false);
+	let isSaved = $state(false);
+	let saving = $state(false);
+
+	$effect(() => {
+		if (job?.id && $auth.isAuthenticated) {
+			savedJobService.isJobSaved(job.id).then((saved) => (isSaved = saved));
+		} else {
+			isSaved = false;
+		}
+	});
+
+	async function toggleSave() {
+		if (!job?.id || saving) return;
+		saving = true;
+		try {
+			if (isSaved) {
+				await savedJobService.unsaveJob(job.id);
+				isSaved = false;
+				showToast("Job removed from saved", "info");
+			} else {
+				await savedJobService.saveJob(job.id);
+				isSaved = true;
+				showToast("Job saved!", "success");
+			}
+		} catch (e) {
+			showToast("Failed to update saved status", "error");
+		} finally {
+			saving = false;
+		}
+	}
 
 	let requirementsList = $derived(
 		job?.requirements
@@ -104,7 +135,23 @@
 										class="loading loading-spinner loading-xs text-indigo-600"
 									></span>
 								{:else}
-									<Bookmark class="h-5 w-5 text-indigo-600" />
+									<button
+										onclick={toggleSave}
+										disabled={saving}
+										class="cursor-pointer"
+									>
+										{#if saving}
+											<span
+												class="loading loading-spinner loading-xs text-indigo-600"
+											></span>
+										{:else}
+											<Bookmark
+												class="h-5 w-5 {isSaved
+													? 'text-indigo-600 fill-indigo-600'
+													: 'text-indigo-600'}"
+											/>
+										{/if}
+									</button>
 								{/if}
 							</h2>
 							<p
