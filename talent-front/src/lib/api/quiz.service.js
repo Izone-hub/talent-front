@@ -36,4 +36,12 @@ export const quizService = {
     submitQuiz: async (quizId) => {
         return apiClient.post(`/quizzes/${quizId}/submit`);
     },
+
+	listQuizzes: async () => {
+		return apiClient.get('/quizzes');
+	},
+
+	getResult: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/result`);
+	},
 };
