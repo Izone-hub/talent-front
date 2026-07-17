@@ -10,6 +10,7 @@
     } from "$lib/utils/dateFormatter";
     import { showToast } from "$lib/stores/toast";
     import GlobalLoadingOverlay from "$lib/components/ui/GlobalLoadingOverlay.svelte";
+    import SavedJobs from "$lib/components/jobs/SavedJobs.svelte";
     import {
         Upload,
         Github,
@@ -555,7 +556,7 @@
                     </div>
                 {/if}
 
-                {#if activeTab === "applications" || activeTab === "saved"}
+                {#if activeTab === "applications"}
                     <div
                         class="py-20 text-center text-slate-500 bg-white rounded-2xl border border-slate-200"
                     >
@@ -569,6 +570,10 @@
                             Application tracking is currently being integrated.
                         </p>
                     </div>
+                {/if}
+
+                {#if activeTab === "saved"}
+                    <SavedJobs />
                 {/if}
             </div>
         </div>
