@@ -2,6 +2,8 @@
 	import { onMount } from "svelte";
 	import JobDetailModal from "$lib/components/jobs/JobDetailModal.svelte";
 	import { jobService } from "$lib/api/job.service";
+	import { savedJobService } from "$lib/api/savedJob.service";
+	import { applicationService } from "$lib/api/application.service";
 	import SkeletonCard from "$lib/components/ui/SkeletonCard.svelte";
 	import EmptyState from "$lib/components/ui/EmptyState.svelte";
 	let { data } = $props();
@@ -9,20 +11,52 @@
 	/** @type {any[]} */
 	let jobs = $state([]);
 	let isLoadingJobs = $state(true);
+	let filter = $state("all");
 
 	let selectedJob = $state(null);
 	let isLoadingDetail = $state(false);
 
-	onMount(async () => {
+	async function loadJobs() {
+		isLoadingJobs = true;
 		try {
-			const result = await jobService.listPublishedJobs();
-			jobs = Array.isArray(result) ? result : [];
+			if (filter === "saved") {
+				const saved = await savedJobService.listSavedJobs();
+				jobs = (Array.isArray(saved) ? saved : []).map((j) => ({
+					id: j.JobID,
+					title: j.Title,
+					company: j.Company,
+					location: j.Location,
+					status: j.JobStatus || j.status,
+					job_type: j.JobType,
+					salary_currency: j.SalaryCurrency,
+					salary_min: j.SalaryMin,
+					salary_max: j.SalaryMax,
+					remote_possible: j.RemotePossible,
+					description: j.Description,
+				}));
+			} else if (filter === "applied") {
+				const apps = await applicationService.getMyApplications();
+				jobs = (Array.isArray(apps) ? apps : []).map((a) => ({
+					id: a.JobID,
+					jobId: a.JobID,
+					title: a.JobTitle,
+					company: a.JobCompany,
+					status: a.JobStatus,
+					user_application: { applied: true },
+				}));
+			} else {
+				const result = await jobService.listPublishedJobs();
+				jobs = Array.isArray(result) ? result : [];
+			}
 		} catch (error) {
 			console.error("Error loading jobs:", error);
+			jobs = [];
 		} finally {
 			isLoadingJobs = false;
 		}
-	});
+	}
+
+	onMount(loadJobs);
 
 	/**
 	 * @param {any} job
@@ -122,11 +156,13 @@
 					<div class="h-6 w-px shrink-0 bg-slate-200"></div>
 
 					<select
+						bind:value={filter}
+						onchange={loadJobs}
 						class="select h-11 min-h-0 cursor-pointer rounded-none border-none bg-transparent pr-8 pl-3 font-medium text-slate-600 shadow-none transition-colors hover:bg-slate-50 focus:outline-none"
 					>
-						<option selected>All Jobs</option>
-						<option>Saved Jobs</option>
-						<option>Applied Jobs</option>
+						<option value="all">All Jobs</option>
+						<option value="saved">Saved Jobs</option>
+						<option value="applied">Applied Jobs</option>
 					</select>
 				</div>
 			</div>
@@ -188,11 +224,13 @@
 								</div>
 							</div>
 
-							<p
-								class="list-col-wrap hidden max-w-md text-sm leading-relaxed text-slate-500 md:block"
-							>
-								{job.description}
-							</p>
+							{#if job.description}
+								<p
+									class="list-col-wrap hidden max-w-md text-sm leading-relaxed text-slate-500 md:block"
+								>
+									{job.description}
+								</p>
+							{/if}
 
 							<div
 								class="my-2 flex flex-wrap items-center justify-end gap-2"
@@ -217,35 +255,39 @@
 										Applied
 									</div>
 								{/if}
-								<div
-									class="badge gap-1 rounded-lg badge-outline border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-600 badge-primary"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										class="h-3.5 w-3.5"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										><path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-										/><path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-										/></svg
+								{#if job.job_type}
+									<div
+										class="badge gap-1 rounded-lg badge-outline border-indigo-200 bg-indigo-50 px-3 py-2.5 text-xs font-medium text-indigo-600 badge-primary"
 									>
-									{job.job_type}
-								</div>
-								<div
-									class="badge gap-1 rounded-lg badge-outline border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-600 badge-success"
-								>							
-									{job.salary_currency}
-									{job.salary_min.toLocaleString()} - {job.salary_max.toLocaleString()}
-								</div>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-3.5 w-3.5"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											><path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+											/><path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+											/></svg
+										>
+										{job.job_type}
+									</div>
+								{/if}
+								{#if job.salary_min != null}
+									<div
+										class="badge gap-1 rounded-lg badge-outline border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-600 badge-success"
+									>							
+										{job.salary_currency}
+										{job.salary_min.toLocaleString()} - {job.salary_max.toLocaleString()}
+									</div>
+								{/if}
 							</div>
 						</li>
 					{/each}
