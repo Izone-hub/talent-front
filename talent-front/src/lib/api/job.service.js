@@ -62,7 +62,7 @@ export const jobService = {
     },
 
     listMyJobs: async () => {
-        const response = await apiClient.get('/jobs');
+        const response = await apiClient.get('/jobs/my');
         return response?.jobs || [];
     },
 
