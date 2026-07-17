@@ -315,6 +315,10 @@
         goto("/applications");
     }
 
+    function goToResults() {
+        goto(`/quizzes/${quizId}/result`);
+    }
+
     function selectOption(val) {
         selectedOption = selectedOption === val ? "" : val;
     }
@@ -608,6 +612,15 @@
                                 <Send class="h-4 w-4" />
                                 Submit Quiz
                             {/if}
+                        </button>
+                    {/if}
+                    {#if submitted}
+                        <button
+                            onclick={goToResults}
+                            class="btn gap-2 border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                            <BarChart3 class="h-4 w-4" />
+                            View Results
                         </button>
                     {/if}
                     <button
