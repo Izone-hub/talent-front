@@ -49,6 +49,17 @@
         );
     }
 
+    function canViewResult(app) {
+        return app.QuizID && (
+            app.Status === "quiz_completed" ||
+            app.Status === "under_review" ||
+            app.Status === "shortlisted" ||
+            app.Status === "interviewed" ||
+            app.Status === "accepted" ||
+            app.Status === "rejected"
+        );
+    }
+
     function formatDate(dateStr) {
         if (!dateStr) return "N/A";
         return new Date(dateStr).toLocaleDateString("en-US", {
@@ -165,6 +176,15 @@
                                     >
                                         <FileQuestion class="h-4 w-4" />
                                         {app.Status === "quiz_started" ? "Continue Quiz" : "Take Quiz"}
+                                        <ArrowRight class="h-4 w-4" />
+                                    </button>
+                                {:else if canViewResult(app)}
+                                    <button
+                                        onclick={() => goto(`/quizzes/${app.QuizID}/result?application_id=${app.ID}`)}
+                                        class="btn gap-2 border-emerald-600/90 bg-emerald-600 text-white hover:bg-emerald-700"
+                                    >
+                                        <CheckCircle2 class="h-4 w-4" />
+                                        View Result
                                         <ArrowRight class="h-4 w-4" />
                                     </button>
                                 {:else if app.Status === "under_review" || app.Status === "shortlisted" || app.Status === "interviewed"}
