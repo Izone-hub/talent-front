@@ -14,17 +14,6 @@
 </svelte:head>
 
 <div class="flex min-h-screen flex-col bg-gray-50">
-	<nav class="sticky top-0 z-80 w-full border-b border-gray-200 bg-gray-50 opacity-90">
-		<div class="mx-auto flex h-16 max-w-7xl items-center px-4 sm:px-6 lg:px-8">
-			<a href="/" class="flex items-center gap-2">
-				<img src={IZoneLogo} alt="iZone" class="h-7 w-auto" />
-				<div class="flex flex-col leading-tight">
-					<span class="text-lg font-bold text-purple-700">Talent</span>
-					<span class="text-xs text-gray-500">connect your first job</span>
-				</div>
-			</a>
-		</div>
-	</nav>
 
 	<main class="flex grow items-center justify-center px-4">
 		{#if $page.status === 404}
@@ -66,8 +55,4 @@
 			</div>
 		{/if}
 	</main>
-
-	<footer class="border-t border-gray-200 bg-white py-6 text-center">
-		<p class="text-sm text-gray-400">&copy; 2025 iZone Talent. All rights reserved.</p>
-	</footer>
 </div>
