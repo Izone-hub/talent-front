@@ -210,12 +210,22 @@
                                     {/if}
                                 </td>
                                 <td class="text-right">
-                                    <button
-                                        onclick={() => openApplicationDetail(app)}
-                                        class="btn btn-sm btn-ghost text-purple-600 hover:bg-purple-50"
-                                    >
-                                        Details
-                                    </button>
+                                    <div class="flex items-center justify-end gap-2">
+                                        {#if getVal(app, 'QuizID', 'quiz_id')}
+                                            <button
+                                                onclick={() => goto(`/quizzes/${getVal(app, 'QuizID', 'quiz_id')}/result`)}
+                                                class="btn btn-sm btn-ghost text-emerald-600 hover:bg-emerald-50"
+                                            >
+                                                Result
+                                            </button>
+                                        {/if}
+                                        <button
+                                            onclick={() => openApplicationDetail(app)}
+                                            class="btn btn-sm btn-ghost text-purple-600 hover:bg-purple-50"
+                                        >
+                                            Details
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         {/each}
