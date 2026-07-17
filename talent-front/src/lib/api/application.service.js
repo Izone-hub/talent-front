@@ -16,11 +16,6 @@ export const applicationService = {
         return response || [];
     },
 
-    /**
-     * Accept a job application
-     * @param {string} applicationId - The application ID
-     * @returns {Promise<Object>}
-     */
     acceptApplication: async (applicationId) => {
         try {
             const response = await apiClient.patch(`/applications/${applicationId}/accept`);
@@ -31,11 +26,6 @@ export const applicationService = {
         }
     },
 
-    /**
-     * Reject a job application
-     * @param {string} applicationId - The application ID
-     * @returns {Promise<Object>}
-     */
     rejectApplication: async (applicationId, reason = '', feedback = '') => {
         try {
             const response = await apiClient.patch(`/applications/${applicationId}/reject`, {
@@ -47,5 +37,40 @@ export const applicationService = {
             console.error('Failed to reject application:', error);
             throw error;
         }
+    },
+
+    startReview: async (applicationId) => {
+        return apiClient.patch(`/applications/${applicationId}/review`);
+    },
+
+    shortlistApplication: async (applicationId) => {
+        return apiClient.patch(`/applications/${applicationId}/shortlist`);
+    },
+
+    markInterviewed: async (applicationId) => {
+        return apiClient.patch(`/applications/${applicationId}/interview`);
+    },
+
+    withdrawApplication: async (applicationId) => {
+        return apiClient.patch(`/applications/${applicationId}/withdraw`);
+    },
+
+    addEmployerFeedback: async (applicationId, feedback) => {
+        return apiClient.patch(`/applications/${applicationId}/feedback`, { feedback });
+    },
+
+    getRecentApplications: async () => {
+        const response = await apiClient.get('/applications/recent');
+        return response || [];
+    },
+
+    listByStatus: async (status) => {
+        const response = await apiClient.get(`/applications/status/${status}`);
+        return response || [];
+    },
+
+    getApplicationCountsByJob: async (jobId) => {
+        const response = await apiClient.get(`/jobs/${jobId}/applications/counts`);
+        return response;
     }
 };
