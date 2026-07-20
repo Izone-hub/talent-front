@@ -73,13 +73,18 @@
 			}
 
 			const response = await jobService.applyForJob(job.id);
-			showToast("Successfully applied! Take the quiz to proceed.", "success");
-			if (response?.quiz_id) {
-				window.location.href = `http://localhost:5000/api/v1/quizzes/${response.quiz_id}/question`;
+			if (response?.application_id) {
+				showToast("Successfully applied! Take the quiz to proceed.", "success");
+				if (response?.quiz_id) {
+					goto(`/quizzes/${response.quiz_id}`);
+					return;
+				}
+				goto("/applications");
+			} else {
+				showToast("Unexpected response from server", "error");
+				goto("/applications");
 				return;
 			}
-
-			goto("/applications");
 		} catch (error) {
 			const message = error.message || "Failed to apply for the job";
 
@@ -91,6 +96,7 @@
 				goto("/profile");
 			} else {
 				showToast(message, "error");
+				goto("/applications");
 			}
 		} finally {
 			applying = false;
