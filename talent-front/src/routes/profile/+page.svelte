@@ -41,9 +41,26 @@
     let currentCV = null;
     let cvVersions = [];
     let activeTab = "profile";
+    let githubStats = null;
+
+    $: {
+        if (user?.github_username && !githubStats) {
+            fetchGitHubStats(user.github_username);
+        }
+    }
+
+    async function fetchGitHubStats(username) {
+        try {
+            const res = await fetch(`https://api.github.com/users/${username}`);
+            if (res.ok) {
+                githubStats = await res.json();
+            }
+        } catch (err) {
+            console.error("Failed to fetch GitHub stats:", err);
+        }
+    }
 
     onMount(async () => {
-        // Initial check if user is already loaded
         if (user) {
             await loadCVData();
         }
@@ -191,7 +208,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.public_repos || 0}
+                            {githubStats?.public_repos ?? user?.public_repos ?? 0}
                         </p>
                     </div>
                     <div
@@ -207,7 +224,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.followers || 0}
+                            {githubStats?.followers ?? user?.followers ?? 0}
                         </p>
                     </div>
                     <div
@@ -223,7 +240,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.following || 0}
+                            {githubStats?.following ?? user?.following ?? 0}
                         </p>
                     </div>
                     <div
@@ -239,7 +256,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.public_gists || 0}
+                            {githubStats?.public_gists ?? user?.public_gists ?? 0}
                         </p>
                     </div>
                 </div>
@@ -251,7 +268,7 @@
                         <div class="space-y-6">
                             <!-- Profile Card -->
                             <div
-                                class="overflow-hidden rounded-lg border border-slate-200 bg-white pb-6"
+                                class="overflow-hidden rounded-lg border border-slate-200 bg-white pb-12"
                             >
                                 <div
                                     class="h-24 bg-gradient-to-r from-[#e9ecef] to-[#ced4da]"
@@ -293,45 +310,6 @@
                                                 {user.bio}
                                             </p>
                                         {/if}
-
-                                        <div
-                                            class="space-y-2 text-sm text-slate-500"
-                                        >
-                                            {#if user?.location}
-                                                <div
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <MapPin class="h-4 w-4" />
-                                                    <span>{user.location}</span>
-                                                </div>
-                                            {/if}
-                                            {#if user?.blog}
-                                                <div
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <LinkIcon class="h-4 w-4" />
-                                                    <a
-                                                        href={user.blog.startsWith(
-                                                            "http",
-                                                        )
-                                                            ? user.blog
-                                                            : `https://${user.blog}`}
-                                                        target="_blank"
-                                                        class="text-indigo-600 hover:underline"
-                                                        >{user.blog}</a
-                                                    >
-                                                </div>
-                                            {/if}
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <Mail class="h-4 w-4" />
-                                                <span
-                                                    >{user?.email ||
-                                                        "N/A"}</span
-                                                >
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
