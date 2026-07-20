@@ -21,7 +21,7 @@
     async function loadJobs() {
         loading = true;
         try {
-            jobs = await jobService.listMyJobs();
+            jobs = await jobService.listPublishedJobs();
         } catch (error) {
             showToast("Failed to load jobs", "error");
             console.error(error);
