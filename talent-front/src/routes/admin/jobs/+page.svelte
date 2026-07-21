@@ -1,18 +1,11 @@
 <script>
-    import { onMount } from "svelte";
     import { jobService } from "$lib/api/job.service";
     import {
         Plus,
         Briefcase,
         MapPin,
         Clock,
-        MoreVertical,
-        ExternalLink,
-        CheckCircle2,
-        Archive,
         Search,
-        Filter,
-        XCircle,
     } from "lucide-svelte";
     import PageLoader from "$lib/components/ui/PageLoader.svelte";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
@@ -20,16 +13,15 @@
     import CreateJobModal from "$lib/components/modals/admin/jobs/CreateJobModal.svelte";
     import JobDetailModal from "$lib/components/modals/admin/jobs/job-detail.svelte";
 
-    let jobs = [];
-    let loading = true;
-    let isCreateModalOpen = false;
-    let isDetailModalOpen = false;
-    let selectedJob = null;
-    let searchQuery = "";
-    let currentTab = "published";
+    let jobs = $state([]);
+    let loading = $state(true);
+    let isCreateModalOpen = $state(false);
+    let isDetailModalOpen = $state(false);
+    let selectedJob = $state(null);
+    let searchQuery = $state("");
+    let currentTab = $state("published");
 
-    // Form state for new job
-    let newJob = {
+    let newJob = $state({
         title: "",
         company: "",
         company_logo: "",
@@ -47,10 +39,21 @@
         salary_max: null,
         salary_currency: "USD",
         expires_at: "",
-    };
+    });
 
-    onMount(async () => {
-        await loadJobs();
+    let filteredJobs = $derived(jobs.filter((job) => {
+        const matchesSearch =
+            job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            job.location?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        const status = job.status?.toLowerCase() || "draft";
+        const matchesTab = status === currentTab;
+
+        return matchesSearch && matchesTab;
+    }));
+
+    $effect(() => {
+        loadJobs();
     });
 
     async function loadJobs() {
@@ -65,13 +68,11 @@
         }
     }
 
-    async function handleCreateJob(event) {
-        const jobData = event.detail;
+    async function handleCreateJob(jobData) {
         try {
             await jobService.createJob(jobData);
             showToast("Job created successfully", "success");
             isCreateModalOpen = false;
-            // Reset form
             newJob = {
                 title: "",
                 company: "",
@@ -103,7 +104,7 @@
             else if (action === "close") await jobService.closeJob(id);
             else if (action === "archive") await jobService.archiveJob(id);
 
-            showToast(`Job ${action}ed successfuly`, "success");
+            showToast(`Job ${action}ed successfully`, "success");
             await loadJobs();
         } catch (error) {
             showToast(`Failed to ${action} job`, "error");
@@ -127,17 +128,6 @@
                 return "badge-warning";
         }
     }
-
-    $: filteredJobs = jobs.filter((job) => {
-        const matchesSearch =
-            job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            job.location?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const status = job.status?.toLowerCase() || "draft";
-        const matchesTab = status === currentTab;
-
-        return matchesSearch && matchesTab;
-    });
 </script>
 
 <div class="space-y-8 max-w-full mx-auto">
@@ -166,44 +156,58 @@
     <div
         class="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-4 rounded-lg border border-gray-100 px-6"
     >
-        <div class="tabs tabs-boxed bg-gray-100/50 p-1 gap-1 rounded-lg">
+        <div class="tabs tabs-bordered p-1 gap-1 rounded-lg">
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "published"}
+                class:tab-active={currentTab === "published"}
                 class:text-purple-600={currentTab === "published"}
                 onclick={() => (currentTab = "published")}
             >
                 Published
-                <!-- <span
-                    class="ml-2 badge badge-sm badge-success text-white font-bold"
+                <span
+                    class="ml-2 text-xs opacity-60"
                 >
-                    {jobs.filter((j) => j.status?.toLowerCase() === "published")
-                        .length}
-                </span> -->
+                    ({jobs.filter((j) => j.status?.toLowerCase() === "published").length})
+                </span>
             </button>
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "draft"}
+                class:tab-active={currentTab === "draft"}
                 class:text-purple-600={currentTab === "draft"}
                 onclick={() => (currentTab = "draft")}
             >
                 Drafts
+                <span
+                    class="ml-2 text-xs opacity-60"
+                >
+                    ({jobs.filter((j) => j.status?.toLowerCase() === "draft").length})
+                </span>
             </button>
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "closed"}
+                class:tab-active={currentTab === "closed"}
                 class:text-purple-600={currentTab === "closed"}
                 onclick={() => (currentTab = "closed")}
             >
                 Closed
+                <span
+                    class="ml-2 text-xs opacity-60"
+                >
+                    ({jobs.filter((j) => (j.status?.toLowerCase() === "closed")).length})
+                </span>
             </button>
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "archived"}
+                class:tab-active={currentTab === "archived"}
                 class:text-purple-600={currentTab === "archived"}
                 onclick={() => (currentTab = "archived")}
             >
                 Archived
+                <span
+                    class="ml-2 text-xs opacity-60"
+                >
+                    ({jobs.filter((j) => (j.status?.toLowerCase() === "archived")).length})
+                </span>
             </button>
         </div>
 
@@ -327,22 +331,21 @@
     </div>
 </div>
 
-<!-- Create Job Modal Component -->
 <CreateJobModal
     isOpen={isCreateModalOpen}
     jobData={newJob}
-    on:close={() => (isCreateModalOpen = false)}
-    on:submit={handleCreateJob}
+    onclose={() => (isCreateModalOpen = false)}
+    onsubmit={handleCreateJob}
 />
 
 <JobDetailModal
     isOpen={isDetailModalOpen}
     job={selectedJob}
-    on:close={() => {
+    onclose={() => {
         isDetailModalOpen = false;
         selectedJob = null;
     }}
-    on:jobUpdated={async () => {
+    onjobUpdated={async () => {
         await loadJobs();
     }}
 />
