@@ -1,11 +1,10 @@
 <script>
     import { XCircle, Globe, MapPin, Building2, Image } from "lucide-svelte";
-    import { createEventDispatcher } from "svelte";
     import { jobService } from "$lib/api/job.service";
 
-    const dispatch = createEventDispatcher();
-
     export let isOpen = false;
+    export let onclose = () => {};
+    export let onsubmit = (data) => {};
     export let jobData = {
         title: "",
         company: "",
@@ -27,12 +26,11 @@
     };
 
     function close() {
-        dispatch("close");
+        onclose();
     }
 
     function submit(e) {
         e.preventDefault();
-        // Convert empty strings to null for optional pointer fields if needed by API
         const payload = { ...jobData };
         if (!payload.company_logo) payload.company_logo = null;
         if (!payload.company_website) payload.company_website = null;
@@ -44,7 +42,6 @@
         if (!payload.expires_at) {
             payload.expires_at = null;
         } else if (payload.expires_at.length === 10) {
-            // YYYY-MM-DD to ISO RFC3339 format
             payload.expires_at = payload.expires_at + "T23:59:59Z";
         }
 
@@ -58,18 +55,20 @@
 
         if (!payload.salary_currency) payload.salary_currency = "USD";
 
-        payload.status = "draft";``
+        payload.status = "draft";
 
-        dispatch("submit", payload);
+        onsubmit(payload);
     }
 </script>
 
-{#if isOpen}
+    {#if isOpen}
     <div
         class="modal modal-open bg-black/40 backdrop-blur-sm transition-all duration-300 z-[100]"
+        onclick={close}
     >
         <div
             class="modal-box max-w-5xl rounded-lg p-0 overflow-hidden border-none scale-95"
+            onclick={(e) => e.stopPropagation()}
         >
             <!-- Modal Header -->
             <div class="bg-purple-600 p-8 text-white relative">
