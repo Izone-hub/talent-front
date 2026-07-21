@@ -69,6 +69,25 @@
 		return null;
 	}
 
+	function formatSummary(summary) {
+		if (!summary) return "";
+		try {
+			const parsed = JSON.parse(summary);
+			if (parsed.response && typeof parsed.response === "string") {
+				return parsed.response;
+			}
+			if (parsed.analysis?.checks?.length) {
+				return parsed.analysis.checks.map(c => c.message).filter(Boolean).join(". ") + ".";
+			}
+			if (parsed.response?.checks?.length) {
+				return parsed.response.checks.map(c => c.message).filter(Boolean).join(". ") + ".";
+			}
+		} catch {
+			// not JSON, use as-is
+		}
+		return summary;
+	}
+
 	function formatDate(dateStr) {
 		if (!dateStr) return "—";
 		try {
@@ -433,7 +452,7 @@
 						{#if intelligenceData.ai_summary.summary}
 							<div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200 xl:col-span-2">
 								<p class="text-xs font-medium text-slate-500">Summary</p>
-								<p class="mt-2 break-words text-sm leading-6 text-slate-700">{intelligenceData.ai_summary.summary}</p>
+								<p class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatSummary(intelligenceData.ai_summary.summary)}</p>
 							</div>
 						{/if}
 						{#if intelligenceData.ai_summary.strengths}
