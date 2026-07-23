@@ -3,7 +3,9 @@
     import { goto } from "$app/navigation";
     import { auth } from "$lib/stores/authStore";
     import { applicationService } from "$lib/api/application.service";
+    import { jobService } from "$lib/api/job.service";
     import { showToast } from "$lib/stores/toast";
+    import JobDetailModal from "$lib/components/jobs/JobDetailModal.svelte";
     import {
         Briefcase,
         Building2,
@@ -23,6 +25,8 @@
     let isLoading = $state(true);
     let showWarningModal = $state(false);
     let pendingQuizApp = $state(null);
+    let selectedJob = $state(null);
+    let isLoadingDetail = $state(false);
 
     const statusConfig = {
         draft: { label: "Draft", class: "badge-ghost" },
@@ -91,6 +95,29 @@
         showWarningModal = false;
     }
 
+    async function openJobDetail(app) {
+        selectedJob = {
+            id: app.JobID,
+            title: app.JobTitle,
+            company: app.JobCompany,
+        };
+        isLoadingDetail = true;
+        const modal = document.getElementById("application-job-detail-modal");
+        if (modal) modal.checked = true;
+
+        try {
+            const full = await jobService.getPublishedJob(app.JobID);
+            if (full) {
+                full.user_application = { applied: true };
+                selectedJob = full;
+            }
+        } catch (err) {
+            console.error("Failed to load job details:", err);
+        } finally {
+            isLoadingDetail = false;
+        }
+    }
+
     onMount(async () => {
         if (!$auth.isAuthenticated) {
             showToast("Please login to view your applications", "warning");
@@ -141,9 +168,9 @@
                 {#each applications as app (app.ID)}
                     <div class="rounded-xl border border-slate-200 bg-white p-6 transition-all hover:shadow-md">
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div class="min-w-0 flex-1">
+                            <div class="min-w-0 flex-1 cursor-pointer" onclick={() => openJobDetail(app)}>
                                 <div class="flex items-center gap-2">
-                                    <h2 class="truncate text-lg font-bold text-slate-800">
+                                    <h2 class="truncate text-lg font-bold text-slate-800 hover:text-indigo-600">
                                         {app.JobTitle || "Unknown Position"}
                                     </h2>
                                     <span class="badge {statusBadge(app.Status).class} badge-sm">
@@ -259,3 +286,10 @@
         </div>
     </div>
 {/if}
+
+<JobDetailModal
+    job={selectedJob}
+    modalId="application-job-detail-modal"
+    loading={isLoadingDetail}
+    isApplied={true}
+/>
