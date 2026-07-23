@@ -20,8 +20,8 @@
         Timer,
         TimerOff,
     } from "@lucide/svelte";
-    import SkeletonQuiz from "$lib/components/ui/SkeletonQuiz.svelte";
     import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
+    import SkeletonQuiz from "$lib/components/ui/SkeletonQuiz.svelte";
 
     const quizId = $page.params.id;
     const applicationId = $page.url.searchParams.get("application_id");
@@ -522,19 +522,6 @@
                                 <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                     Your Solution
                                 </label>
-                                <button
-                                    onclick={runCode}
-                                    disabled={isRunningCode}
-                                    class="btn btn-ghost btn-sm gap-1.5 text-indigo-600 hover:bg-indigo-50"
-                                >
-                                    {#if isRunningCode}
-                                        <Loader2 class="h-3.5 w-3.5 animate-spin" />
-                                        Running...
-                                    {:else}
-                                        <Play class="h-3.5 w-3.5" />
-                                        Run Code
-                                    {/if}
-                                </button>
                             </div>
                             <textarea
                                 bind:value={code}
