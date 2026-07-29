@@ -1,5 +1,4 @@
 <script>
-    import { onMount } from "svelte";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
     import { auth } from "$lib/stores/authStore";
@@ -69,20 +68,30 @@
         return q.user_answer || "(no answer)";
     }
 
-    onMount(async () => {
+    $effect(() => {
+        if ($auth.loading) return;
         if (!$auth.isAuthenticated) {
             goto("/auth");
             return;
         }
+        loadReview();
+    });
 
+    async function loadReview() {
+        const uid = $auth.user?.id;
+        if (!uid) {
+            error = "User not authenticated";
+            loading = false;
+            return;
+        }
         try {
-            result = await quizService.getResult(quizId);
+            result = await quizService.getResult(quizId, uid);
         } catch (e) {
             error = e.message || "Failed to load quiz review";
         } finally {
             loading = false;
         }
-    });
+    }
 </script>
 
 <div class="min-h-screen bg-slate-50 font-sans">
@@ -166,7 +175,11 @@
                                         <span class="badge badge-sm badge-outline border-slate-300 text-xs text-slate-500">{answer.question_type.replace(/_/g, ' ')}</span>
                                     {/if}
                                 </div>
-                                <p class="text-base font-semibold text-slate-800">{answer.question_text}</p>
+                                {#if answer.question_text}
+                                    <p class="text-base font-semibold text-slate-800">{answer.question_text}</p>
+                                {:else}
+                                    <p class="text-base font-semibold text-slate-400 italic">Question {i + 1}</p>
+                                {/if}
                             </div>
                             {#if answer.is_correct}
                                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
@@ -203,13 +216,15 @@
                                     </p>
                                 {/if}
                             </div>
-                            <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-                                <p class="mb-1 text-xs font-medium text-slate-500 uppercase tracking-wider">Correct Answer</p>
-                                <p class="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
-                                    <CheckCircle2 class="h-3.5 w-3.5" />
-                                    {answer.correct_answer}
-                                </p>
-                            </div>
+                            {#if answer.correct_answer}
+                                <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                                    <p class="mb-1 text-xs font-medium text-slate-500 uppercase tracking-wider">Correct Answer</p>
+                                    <p class="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                                        <CheckCircle2 class="h-3.5 w-3.5" />
+                                        {answer.correct_answer}
+                                    </p>
+                                </div>
+                            {/if}
                         </div>
 
                         <!-- Explanation -->
