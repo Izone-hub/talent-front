@@ -2,7 +2,7 @@
 	import { page } from "$app/stores";
 	import { applicationService } from "$lib/api/application.service";
 	import { intelligenceService } from "$lib/api/intelligence.service";
-	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, Check, X } from "lucide-svelte";
+	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, Check, X, Target } from "lucide-svelte";
 	import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
 	import PageLoader from "$lib/components/ui/PageLoader.svelte";
 	import ButtonLoader from "$lib/components/ui/ButtonLoader.svelte";
@@ -35,12 +35,15 @@
 			}
 			application = data;
 
-			// Load intelligence data
+			// Load intelligence data — try quiz attempt ID (QuizID) first so the backend
+			// can resolve the quiz attempt & compute ATS score. Fall back to UserID.
+			const quizId = getVal(data, "QuizID", "quiz_id");
 			const userId = getVal(data, "UserID", "user_id", "UserId");
-			if (userId) {
+			const idToFetch = (quizId && quizId !== "00000000-0000-0000-0000-000000000000") ? quizId : userId;
+			if (idToFetch) {
 				loadingIntelligence = true;
 				try {
-					const intelligence = await intelligenceService.fetchGitHubIntelligence(userId);
+					const intelligence = await intelligenceService.fetchGitHubIntelligence(idToFetch);
 					intelligenceData = intelligence;
 				} catch (error) {
 					console.error("Failed to fetch GitHub intelligence:", error);
@@ -357,6 +360,50 @@
 								</div>
 							{:else if intelligenceData}
 								<div class="space-y-4">
+									<!-- ATS Score (compact) -->
+									{#if intelligenceData.ats_score}
+										<div class="rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-4 ring-1 ring-slate-200">
+											<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+												<Target size={14} />
+												ATS Score
+											</div>
+											<div class="mt-3 flex items-center gap-4">
+												<div class="flex-1 text-center">
+													<span class="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-4xl font-bold text-transparent">
+														{intelligenceData.ats_score.score ?? 0}
+													</span>
+													<span class="text-lg font-bold text-slate-400">/100</span>
+												</div>
+												{#if intelligenceData.quiz_attempt?.passed !== undefined}
+													<div class="flex items-center gap-1.5 text-sm font-semibold">
+														{#if intelligenceData.quiz_attempt.passed}
+															<span class="flex items-center gap-1 text-emerald-600"><Check size={16} />Passed</span>
+														{:else}
+															<span class="flex items-center gap-1 text-red-500"><X size={16} />Failed</span>
+														{/if}
+													</div>
+												{/if}
+											</div>
+											{#if intelligenceData.ats_score.checks?.length}
+												<div class="mt-3 space-y-1.5 border-t border-white/60 pt-3">
+													{#each intelligenceData.ats_score.checks as check}
+														<div class="flex items-center gap-2 text-xs">
+															{#if check.status === "pass"}
+																<Check size={12} class="shrink-0 text-emerald-500" />
+															{:else if check.status === "warn"}
+																<Loader2 size={12} class="shrink-0 text-amber-500" />
+															{:else}
+																<X size={12} class="shrink-0 text-red-500" />
+															{/if}
+															<span class="text-slate-600 truncate">{check.label}</span>
+														</div>
+													{/each}
+												</div>
+											{/if}
+										</div>
+									{/if}
+
+									
 									<div class="rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 p-4 ring-1 ring-slate-200">
 										<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
 											<GitBranch size={14} />
