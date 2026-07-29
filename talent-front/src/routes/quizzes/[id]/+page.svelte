@@ -43,6 +43,7 @@
     let historyIndex = $state(-1);
     let timeRemaining = $state(0);
     let timerInterval = null;
+    let userAnswers = $state([]);
 
     function getQuizQuestionCount() {
         return quiz?.questions_per_quiz || quiz?.total_questions || 10;
@@ -226,6 +227,12 @@
         }
     }
 
+    function computeIsCorrect(q, answer) {
+        if (isCoding(q)) return codeOutput?.passed === true;
+        if (!q.correct_answer) return false;
+        return answer === q.correct_answer;
+    }
+
     async function saveCurrentAnswer() {
         if (!question || isSaving) return;
         isSaving = true;
@@ -235,7 +242,22 @@
                 : 0;
             persistCurrentQuestionState();
             const answer = isCoding(question) ? code : (selectedOption || "");
-            await quizService.saveAnswer(quizId, question.id, answer, timeSpent, !selectedOption && !isCoding(question));
+            const isSkipped = !selectedOption && !isCoding(question);
+            await quizService.saveAnswer(quizId, question.id, answer, timeSpent, isSkipped);
+
+            const isCorrect = computeIsCorrect(question, answer);
+            userAnswers = [...userAnswers.filter(a => a.question_id !== question.id), {
+                question_id: question.id,
+                question_text: question.question_text,
+                question_type: question.question_type,
+                difficulty: question.difficulty,
+                options: question.options,
+                correct_answer: question.correct_answer,
+                user_answer: answer,
+                is_correct: isCorrect,
+                is_skipped: isSkipped,
+                time_spent_seconds: timeSpent,
+            }];
             return true;
         } catch (e) {
             showToast("Failed to save answer", "error");
@@ -298,6 +320,26 @@
             resultMessage = "Quiz submitted successfully!";
             showToast("Quiz submitted!", "success");
             submitted = true;
+
+            const correct = userAnswers.filter(a => a.is_correct).length;
+            const wrong = userAnswers.filter(a => !a.is_correct && !a.is_skipped).length;
+            const skipped = userAnswers.filter(a => a.is_skipped).length;
+            const timeSpent = userAnswers.reduce((s, a) => s + (a.time_spent_seconds || 0), 0);
+            const totalQuestions = userAnswers.length;
+            const score = totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0;
+            quizService.saveQuizResult(quizId, {
+                title: quiz?.title || 'Technical Assessment',
+                completed_at: new Date().toISOString(),
+                score,
+                correct_answers: correct,
+                total_questions: totalQuestions,
+                wrong_answers: wrong,
+                skipped,
+                time_spent_seconds: timeSpent,
+                passing_score: 70,
+                passed: score >= 70,
+                answers: userAnswers,
+            });
         } catch (e) {
             if (e.message && e.message.includes("already completed")) {
                 resultMessage = "Quiz was already completed.";
@@ -347,12 +389,32 @@
         stopTimer();
     });
 
-    onMount(async () => {
-        if (!$auth.isAuthenticated) {
+    onMount(() => {
+        waitForAuth();
+    });
+
+    async function waitForAuth() {
+        if ($auth.loading) {
+            const unsub = auth.subscribe(s => {
+                if (!s.loading) {
+                    unsub();
+                    handleAuthResult(s.isAuthenticated);
+                }
+            });
+            return;
+        }
+        handleAuthResult($auth.isAuthenticated);
+    }
+
+    function handleAuthResult(ok) {
+        if (!ok) {
             goto("/auth");
             return;
         }
+        loadQuiz();
+    }
 
+    async function loadQuiz() {
         try {
             quiz = await quizService.getQuiz(quizId);
         } catch {
@@ -387,7 +449,7 @@
         } catch {
             phase = "ready";
         }
-    });
+    }
 </script>
 
 <div class="min-h-screen bg-slate-50 font-sans">
