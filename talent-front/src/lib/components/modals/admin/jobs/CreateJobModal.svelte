@@ -1,11 +1,10 @@
 <script>
-    import { XCircle, Globe, MapPin, Building2, Image, AlertCircle } from "lucide-svelte";
-    import { createEventDispatcher } from "svelte";
+    import { XCircle, Globe, MapPin, Building2, Image } from "lucide-svelte";
     import { jobService } from "$lib/api/job.service";
 
-    const dispatch = createEventDispatcher();
-
     export let isOpen = false;
+    export let onclose = () => {};
+    export let onsubmit = (data) => {};
     export let jobData = {
         title: "",
         company: "",
@@ -16,100 +15,22 @@
         requirements: "",
         responsibilities: "",
         benefits: "",
-        job_type: "full-time",
-        experience_level: "entry",
+        job_type: "",
+        experience_level: "",
         location: "",
         remote_possible: false,
         salary_min: null,
         salary_max: null,
-        salary_currency: "USD",
+        salary_currency: "",
         expires_at: "",
     };
 
-    let errors = {};
-    let submitted = false;
-
     function close() {
-        errors = {};
-        submitted = false;
-        dispatch("close");
-    }
-
-    function validate() {
-        const e = {};
-        if (!jobData.title || !jobData.title.trim()) {
-            e.title = "Job title is required";
-        } else if (jobData.title.trim().length < 3) {
-            e.title = "Job title must be at least 3 characters";
-        } else if (jobData.title.trim().length > 200) {
-            e.title = "Job title must be less than 200 characters";
-        }
-
-        if (!jobData.company || !jobData.company.trim()) {
-            e.company = "Company name is required";
-        }
-
-        if (jobData.company_website && jobData.company_website.trim()) {
-            try {
-                new URL(jobData.company_website);
-            } catch {
-                e.company_website = "Enter a valid URL (e.g. https://example.com)";
-            }
-        }
-
-        if (!jobData.description || !jobData.description.trim()) {
-            e.description = "Job description is required";
-        } else if (jobData.description.trim().length < 50) {
-            e.description = "Description must be at least 50 characters";
-        }
-
-        if (!jobData.requirements || !jobData.requirements.trim()) {
-            e.requirements = "Requirements are required";
-        } else if (jobData.requirements.trim().length < 20) {
-            e.requirements = "Requirements must be at least 20 characters";
-        }
-
-        const sMin = jobData.salary_min ? parseInt(jobData.salary_min, 10) : null;
-        const sMax = jobData.salary_max ? parseInt(jobData.salary_max, 10) : null;
-        if (sMin !== null && sMin < 0) {
-            e.salary_min = "Minimum salary cannot be negative";
-        }
-        if (sMax !== null && sMax < 0) {
-            e.salary_max = "Maximum salary cannot be negative";
-        }
-        if (sMin !== null && sMax !== null && sMin > sMax) {
-            e.salary_max = "Max salary must be greater than or equal to min salary";
-        }
-
-        if (jobData.expires_at) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const expiry = new Date(jobData.expires_at);
-            if (expiry <= today) {
-                e.expires_at = "Expiration date must be in the future";
-            }
-        }
-
-        return e;
-    }
-
-    function getFieldClass(field) {
-        const base = "input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl";
-        return errors[field] && submitted ? base + " ring-2 ring-red-400 focus:ring-red-500" : base;
-    }
-
-    function getTextareaClass(field) {
-        const base = "textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-lg w-full";
-        return errors[field] && submitted ? base + " ring-2 ring-red-400 focus:ring-red-500" : base;
+        onclose();
     }
 
     function submit(e) {
         e.preventDefault();
-        submitted = true;
-        errors = validate();
-        if (Object.keys(errors).length > 0) return;
-
-        // Convert empty strings to null for optional pointer fields if needed by API
         const payload = { ...jobData };
         if (!payload.company_logo) payload.company_logo = null;
         if (!payload.company_website) payload.company_website = null;
@@ -121,7 +42,6 @@
         if (!payload.expires_at) {
             payload.expires_at = null;
         } else if (payload.expires_at.length === 10) {
-            // YYYY-MM-DD to ISO RFC3339 format
             payload.expires_at = payload.expires_at + "T23:59:59Z";
         }
 
@@ -137,16 +57,18 @@
 
         payload.status = "draft";
 
-        dispatch("submit", payload);
+        onsubmit(payload);
     }
 </script>
 
-{#if isOpen}
+    {#if isOpen}
     <div
         class="modal modal-open bg-black/40 backdrop-blur-sm transition-all duration-300 z-[100]"
+        onclick={close}
     >
         <div
             class="modal-box max-w-5xl rounded-lg p-0 overflow-hidden border-none scale-95"
+            onclick={(e) => e.stopPropagation()}
         >
             <!-- Modal Header -->
             <div class="bg-purple-600 p-8 text-white relative">
@@ -188,15 +110,10 @@
                                     id="job-title"
                                     type="text"
                                     placeholder="e.g. Senior Frontend Engineer"
-                                    class={getFieldClass("title")}
+                                    class="input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
                                     bind:value={jobData.title}
                                     required
                                 />
-                                {#if errors.title && submitted}
-                                    <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                        <AlertCircle size={12} />{errors.title}
-                                    </span>
-                                {/if}
                             </div>
                             <div class="form-control flex flex-col gap-2">
                                 <label
@@ -269,15 +186,10 @@
                                     id="company-name"
                                     type="text"
                                     placeholder="iZone Hub"
-                                    class={getFieldClass("company")}
+                                    class="input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
                                     bind:value={jobData.company}
                                     required
                                 />
-                                {#if errors.company && submitted}
-                                    <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                        <AlertCircle size={12} />{errors.company}
-                                    </span>
-                                {/if}
                             </div>
                             <div class="form-control flex flex-col gap-2">
                                 <label
@@ -293,15 +205,10 @@
                                         id="company-website"
                                         type="url"
                                         placeholder="https://example.com"
-                                        class={getFieldClass("company_website") + " pl-10"}
+                                        class="input w-full pl-10 bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
                                         bind:value={jobData.company_website}
                                     />
                                 </div>
-                                {#if errors.company_website && submitted}
-                                    <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                        <AlertCircle size={12} />{errors.company_website}
-                                    </span>
-                                {/if}
                             </div>
                             <div class="form-control flex flex-col gap-2">
                                 <label
@@ -360,16 +267,11 @@
                                 >
                                 <textarea
                                     id="description"
-                                    class={getTextareaClass("description") + " h-32"}
+                                    class="textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 h-32 rounded-lg w-full"
                                     placeholder="Provide a comprehensive job description..."
                                     bind:value={jobData.description}
                                     required
                                 ></textarea>
-                                {#if errors.description && submitted}
-                                    <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                        <AlertCircle size={12} />{errors.description}
-                                    </span>
-                                {/if}
                             </div>
                             <div class="form-control flex flex-col gap-2">
                                 <label
@@ -378,16 +280,11 @@
                                 >
                                 <textarea
                                     id="requirements"
-                                    class={getTextareaClass("requirements") + " h-24"}
+                                    class="textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 h-24 rounded-lg w-full"
                                     placeholder="List key skills and qualifications..."
                                     bind:value={jobData.requirements}
                                     required
                                 ></textarea>
-                                {#if errors.requirements && submitted}
-                                    <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                        <AlertCircle size={12} />{errors.requirements}
-                                    </span>
-                                {/if}
                             </div>
                             <div class="form-control flex flex-col gap-2">
                                 <label
@@ -452,15 +349,8 @@
                                             type="number"
                                             placeholder="0"
                                             class="input input-sm w-full bg-white border-none ring-1 ring-gray-200 rounded-lg text-sm"
-                                            class:ring-2={errors.salary_min && submitted}
-                                            class:ring-red-400={errors.salary_min && submitted}
                                             bind:value={jobData.salary_min}
                                         />
-                                        {#if errors.salary_min && submitted}
-                                            <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                                <AlertCircle size={12} />{errors.salary_min}
-                                            </span>
-                                        {/if}
                                     </div>
                                     <span class="text-gray-300 mt-5">—</span>
                                     <div class="flex-1">
@@ -473,15 +363,8 @@
                                             type="number"
                                             placeholder="0"
                                             class="input input-sm w-full bg-white border-none ring-1 ring-gray-200 rounded-lg text-sm"
-                                            class:ring-2={errors.salary_max && submitted}
-                                            class:ring-red-400={errors.salary_max && submitted}
                                             bind:value={jobData.salary_max}
                                         />
-                                        {#if errors.salary_max && submitted}
-                                            <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                                <AlertCircle size={12} />{errors.salary_max}
-                                            </span>
-                                        {/if}
                                     </div>
                                 </div>
                                 <div class="flex items-center justify-between">
@@ -518,15 +401,8 @@
                                     id="expires-at"
                                     type="date"
                                     class="input bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    class:ring-2={errors.expires_at && submitted}
-                                    class:ring-red-400={errors.expires_at && submitted}
                                     bind:value={jobData.expires_at}
                                 />
-                                {#if errors.expires_at && submitted}
-                                    <span class="text-xs text-red-500 flex items-center gap-1 mt-1">
-                                        <AlertCircle size={12} />{errors.expires_at}
-                                    </span>
-                                {/if}
                             </div>
                             <p
                                 class="text-[11px] text-gray-400 mt-2 px-1 italic"
@@ -551,7 +427,7 @@
                     Cancel
                 </button>
                 <button
-                    type="button"
+                    type="submit"
                     class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-10 rounded-lg shadow-lg shadow-purple-100 font-bold"
                     onclick={submit}
                 >

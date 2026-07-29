@@ -1,5 +1,5 @@
 <script>
-    import { onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
     import { auth } from "$lib/stores/authStore";
@@ -10,7 +10,6 @@
         CheckCircle2,
         XCircle,
         ChevronRight,
-        ChevronLeft,
         Loader2,
         Code2,
         Terminal,
@@ -18,7 +17,11 @@
         BarChart3,
         ArrowLeft,
         Send,
+        Timer,
+        TimerOff,
     } from "@lucide/svelte";
+    import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
+    import SkeletonQuiz from "$lib/components/ui/SkeletonQuiz.svelte";
 
     const quizId = $page.params.id;
     const applicationId = $page.url.searchParams.get("application_id");
@@ -38,6 +41,9 @@
     let resultMessage = $state("");
     let questionHistory = $state([]);
     let historyIndex = $state(-1);
+    let timeRemaining = $state(0);
+    let timerInterval = null;
+    let userAnswers = $state([]);
 
     function getQuizQuestionCount() {
         return quiz?.questions_per_quiz || quiz?.total_questions || 10;
@@ -55,6 +61,7 @@
             selectedOption,
             code,
             codeOutput,
+            timeRemaining,
         };
     }
 
@@ -71,6 +78,7 @@
         selectedOption = entry.selectedOption || "";
         code = entry.code || "";
         codeOutput = entry.codeOutput ?? null;
+        timeRemaining = entry.timeRemaining ?? entry.question?.time_limit_seconds ?? 0;
     }
 
     function optionsList(q) {
@@ -116,6 +124,48 @@
         return map[d] || "badge-ghost";
     }
 
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    function startTimer() {
+        stopTimer();
+        if (!question || phase !== "active") return;
+
+        const limit = question.time_limit_seconds;
+        if (!limit || limit <= 0) return;
+
+        if (timeRemaining <= 0) {
+            timeRemaining = limit;
+        }
+
+        timerInterval = setInterval(() => {
+            timeRemaining--;
+
+            if (timeRemaining <= 0) {
+                stopTimer();
+                handleTimeUp();
+            }
+        }, 1000);
+    }
+
+    async function handleTimeUp() {
+        if (isSaving || isSubmitting) return;
+
+        showToast("Time's up! Moving to next question.", "warning");
+        if (isLastQuestion()) {
+            const saved = await saveCurrentAnswer();
+            if (saved) {
+                await submitQuiz();
+            }
+        } else {
+            await saveAndNext();
+        }
+    }
+
     async function startQuiz() {
         phase = "starting";
         try {
@@ -132,6 +182,7 @@
         try {
             const q = await quizService.getQuestion(quizId);
             if (q && q.status === "finished") {
+                stopTimer();
                 question = null;
                 resultMessage = q.message || "Quiz complete!";
                 phase = "finished";
@@ -152,6 +203,7 @@
                 selectedOption: "",
                 code: "",
                 codeOutput: null,
+                timeRemaining: q.time_limit_seconds || 0,
             });
 
             questionHistory = nextHistory;
@@ -161,10 +213,12 @@
             selectedOption = "";
             code = "";
             codeOutput = null;
+            timeRemaining = q.time_limit_seconds || 0;
             const details = codingDetails(q);
             if (details?.code_template) {
                 code = details.code_template;
             }
+            startTimer();
         } catch (e) {
             showToast("Failed to load question", "error");
             if (questionNumber === 0) {
@@ -173,13 +227,37 @@
         }
     }
 
+    function computeIsCorrect(q, answer) {
+        if (isCoding(q)) return codeOutput?.passed === true;
+        if (!q.correct_answer) return false;
+        return answer === q.correct_answer;
+    }
+
     async function saveCurrentAnswer() {
         if (!question || isSaving) return;
         isSaving = true;
         try {
+            const timeSpent = question.time_limit_seconds > 0
+                ? question.time_limit_seconds - timeRemaining
+                : 0;
             persistCurrentQuestionState();
             const answer = isCoding(question) ? code : (selectedOption || "");
-            await quizService.saveAnswer(quizId, question.id, answer, 0, !selectedOption && !isCoding(question));
+            const isSkipped = !selectedOption && !isCoding(question);
+            await quizService.saveAnswer(quizId, question.id, answer, timeSpent, isSkipped);
+
+            const isCorrect = computeIsCorrect(question, answer);
+            userAnswers = [...userAnswers.filter(a => a.question_id !== question.id), {
+                question_id: question.id,
+                question_text: question.question_text,
+                question_type: question.question_type,
+                difficulty: question.difficulty,
+                options: question.options,
+                correct_answer: question.correct_answer,
+                user_answer: answer,
+                is_correct: isCorrect,
+                is_skipped: isSkipped,
+                time_spent_seconds: timeSpent,
+            }];
             return true;
         } catch (e) {
             showToast("Failed to save answer", "error");
@@ -200,25 +278,15 @@
         }
     }
 
-    function goToPreviousQuestion() {
-        if (historyIndex <= 0 || isSaving || isSubmitting) return;
-
-        persistCurrentQuestionState();
-        const previousIndex = historyIndex - 1;
-        const previousEntry = questionHistory[previousIndex];
-        if (!previousEntry) return;
-
-        historyIndex = previousIndex;
-        questionNumber = previousIndex + 1;
-        restoreQuestionState(previousEntry);
-        phase = "active";
-    }
-
     async function handlePrimaryAction() {
         if (!question || isSaving) return;
 
+        stopTimer();
         const saved = await saveCurrentAnswer();
-        if (!saved) return;
+        if (!saved) {
+            startTimer();
+            return;
+        }
 
         if (isLastQuestion()) {
             await submitQuiz();
@@ -252,6 +320,26 @@
             resultMessage = "Quiz submitted successfully!";
             showToast("Quiz submitted!", "success");
             submitted = true;
+
+            const correct = userAnswers.filter(a => a.is_correct).length;
+            const wrong = userAnswers.filter(a => !a.is_correct && !a.is_skipped).length;
+            const skipped = userAnswers.filter(a => a.is_skipped).length;
+            const timeSpent = userAnswers.reduce((s, a) => s + (a.time_spent_seconds || 0), 0);
+            const totalQuestions = userAnswers.length;
+            const score = totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0;
+            quizService.saveQuizResult(quizId, {
+                title: quiz?.title || 'Technical Assessment',
+                completed_at: new Date().toISOString(),
+                score,
+                correct_answers: correct,
+                total_questions: totalQuestions,
+                wrong_answers: wrong,
+                skipped,
+                time_spent_seconds: timeSpent,
+                passing_score: 70,
+                passed: score >= 70,
+                answers: userAnswers,
+            });
         } catch (e) {
             if (e.message && e.message.includes("already completed")) {
                 resultMessage = "Quiz was already completed.";
@@ -269,16 +357,64 @@
         goto("/applications");
     }
 
+    function goToResults() {
+        goto(`/quizzes/${quizId}/result`);
+    }
+
     function selectOption(val) {
         selectedOption = selectedOption === val ? "" : val;
     }
 
-    onMount(async () => {
-        if (!$auth.isAuthenticated) {
+    function formatTime(s) {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`;
+    }
+
+    function timerClass() {
+        if (!question?.time_limit_seconds || question.time_limit_seconds <= 0) return "";
+        if (timeRemaining <= 10) return "border-red-300 bg-red-50 text-red-700";
+        if (timeRemaining <= 30) return "border-amber-300 bg-amber-50 text-amber-700";
+        return "border-amber-200 bg-amber-50 text-amber-700";
+    }
+
+    function timerIconClass() {
+        if (!question?.time_limit_seconds || question.time_limit_seconds <= 0) return "";
+        if (timeRemaining <= 10) return "text-red-500";
+        if (timeRemaining <= 30) return "text-amber-600";
+        return "text-amber-500";
+    }
+
+    onDestroy(() => {
+        stopTimer();
+    });
+
+    onMount(() => {
+        waitForAuth();
+    });
+
+    async function waitForAuth() {
+        if ($auth.loading) {
+            const unsub = auth.subscribe(s => {
+                if (!s.loading) {
+                    unsub();
+                    handleAuthResult(s.isAuthenticated);
+                }
+            });
+            return;
+        }
+        handleAuthResult($auth.isAuthenticated);
+    }
+
+    function handleAuthResult(ok) {
+        if (!ok) {
             goto("/auth");
             return;
         }
+        loadQuiz();
+    }
 
+    async function loadQuiz() {
         try {
             quiz = await quizService.getQuiz(quizId);
         } catch {
@@ -298,20 +434,22 @@
             } else if (q && q.id) {
                 question = q;
                 questionNumber = 1;
-                questionHistory = [{ question: q, selectedOption: "", code: "", codeOutput: null }];
+                timeRemaining = q.time_limit_seconds || 0;
+                questionHistory = [{ question: q, selectedOption: "", code: "", codeOutput: null, timeRemaining: q.time_limit_seconds || 0 }];
                 historyIndex = 0;
                 const details = codingDetails(q);
                 if (details?.code_template) {
                     code = details.code_template;
                 }
                 phase = "active";
+                startTimer();
             } else {
                 phase = "ready";
             }
         } catch {
             phase = "ready";
         }
-    });
+    }
 </script>
 
 <div class="min-h-screen bg-slate-50 font-sans">
@@ -319,8 +457,8 @@
 
         <!-- Loading -->
         {#if phase === "loading"}
-            <div class="flex items-center justify-center py-32">
-                <Loader2 class="h-10 w-10 animate-spin text-indigo-600" />
+            <div class="py-8">
+                <SkeletonQuiz />
             </div>
 
         <!-- Ready / Start Screen -->
@@ -343,7 +481,7 @@
                     </span>
                     <span class="flex items-center gap-1.5">
                         <Clock class="h-4 w-4" />
-                        No time limit
+                        Per-question timer
                     </span>
                 </div>
                 <button
@@ -365,7 +503,24 @@
             <div class="space-y-4">
                 <!-- Progress -->
                 <div class="flex items-center justify-between text-sm text-slate-500">
-                    <span>Question {questionNumber}</span>
+                    <div class="flex items-center gap-3">
+                        <span>Question {questionNumber}</span>
+                        {#if question.time_limit_seconds > 0}
+                            <span class="badge badge-outline gap-1.5 px-3 py-2 text-xs font-bold {timerClass()}">
+                                {#if timeRemaining <= 10}
+                                    <Timer class="h-3.5 w-3.5 animate-pulse {timerIconClass()}" />
+                                {:else}
+                                    <Timer class="h-3.5 w-3.5 {timerIconClass()}" />
+                                {/if}
+                                {formatTime(timeRemaining)}
+                            </span>
+                        {:else}
+                            <span class="badge badge-outline gap-1 border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-500">
+                                <TimerOff class="h-3 w-3" />
+                                No limit
+                            </span>
+                        {/if}
+                    </div>
                     <span class="badge {difficultyColor(question.difficulty)} badge-sm">
                         {question.difficulty || "mixed"}
                     </span>
@@ -429,19 +584,6 @@
                                 <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                     Your Solution
                                 </label>
-                                <button
-                                    onclick={runCode}
-                                    disabled={isRunningCode}
-                                    class="btn btn-ghost btn-sm gap-1.5 text-indigo-600 hover:bg-indigo-50"
-                                >
-                                    {#if isRunningCode}
-                                        <Loader2 class="h-3.5 w-3.5 animate-spin" />
-                                        Running...
-                                    {:else}
-                                        <Play class="h-3.5 w-3.5" />
-                                        Run Code
-                                    {/if}
-                                </button>
                             </div>
                             <textarea
                                 bind:value={code}
@@ -457,17 +599,9 @@
                                     <Terminal class="h-3.5 w-3.5" />
                                     Output
                                     {#if codeOutput.passed !== undefined}
-                                        {#if codeOutput.passed}
-                                            <span class="ml-auto flex items-center gap-1 text-emerald-600">
-                                                <CheckCircle2 class="h-3.5 w-3.5" />
-                                                Passed
-                                            </span>
-                                        {:else}
-                                            <span class="ml-auto flex items-center gap-1 text-red-600">
-                                                <XCircle class="h-3.5 w-3.5" />
-                                                Failed
-                                            </span>
-                                        {/if}
+                                        <span class="ml-auto">
+                                            <PassFailBadge score={codeOutput.passed ? 100 : 0} passingThreshold={50} size="sm" />
+                                        </span>
                                     {/if}
                                 </div>
                                 <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-300"><code>{codeOutput.stdout || codeOutput.stderr || "No output"}</code></pre>
@@ -483,16 +617,6 @@
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-slate-400">Next saves your answer. Blank answers are treated as skipped.</span>
                     <div class="flex gap-2">
-                        {#if historyIndex > 0}
-                            <button
-                                onclick={goToPreviousQuestion}
-                                disabled={isSaving || isSubmitting}
-                                class="btn btn-ghost btn-sm gap-1.5 text-slate-500 hover:bg-slate-100"
-                            >
-                                <ChevronLeft class="h-3.5 w-3.5" />
-                                Previous
-                            </button>
-                        {/if}
                         <button
                             onclick={handlePrimaryAction}
                             disabled={isSaving}
@@ -537,6 +661,15 @@
                                 <Send class="h-4 w-4" />
                                 Submit Quiz
                             {/if}
+                        </button>
+                    {/if}
+                    {#if submitted}
+                        <button
+                            onclick={goToResults}
+                            class="btn gap-2 border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                            <BarChart3 class="h-4 w-4" />
+                            View Results
                         </button>
                     {/if}
                     <button

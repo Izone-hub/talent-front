@@ -2,7 +2,10 @@
 	import { page } from "$app/stores";
 	import { applicationService } from "$lib/api/application.service";
 	import { intelligenceService } from "$lib/api/intelligence.service";
-	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, Check, X } from "lucide-svelte";
+	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, Check, X, Target } from "lucide-svelte";
+	import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
+	import PageLoader from "$lib/components/ui/PageLoader.svelte";
+	import ButtonLoader from "$lib/components/ui/ButtonLoader.svelte";
 	import { showToast } from "$lib/stores/toast";
 	import { goto } from "$app/navigation";
 
@@ -32,12 +35,15 @@
 			}
 			application = data;
 
-			// Load intelligence data
+			// Load intelligence data — try quiz attempt ID (QuizID) first so the backend
+			// can resolve the quiz attempt & compute ATS score. Fall back to UserID.
+			const quizId = getVal(data, "QuizID", "quiz_id");
 			const userId = getVal(data, "UserID", "user_id", "UserId");
-			if (userId) {
+			const idToFetch = (quizId && quizId !== "00000000-0000-0000-0000-000000000000") ? quizId : userId;
+			if (idToFetch) {
 				loadingIntelligence = true;
 				try {
-					const intelligence = await intelligenceService.fetchGitHubIntelligence(userId);
+					const intelligence = await intelligenceService.fetchGitHubIntelligence(idToFetch);
 					intelligenceData = intelligence;
 				} catch (error) {
 					console.error("Failed to fetch GitHub intelligence:", error);
@@ -64,6 +70,25 @@
 			if (val != null && val !== "") return val;
 		}
 		return null;
+	}
+
+	function formatSummary(summary) {
+		if (!summary) return "";
+		try {
+			const parsed = JSON.parse(summary);
+			if (parsed.response && typeof parsed.response === "string") {
+				return parsed.response;
+			}
+			if (parsed.analysis?.checks?.length) {
+				return parsed.analysis.checks.map(c => c.message).filter(Boolean).join(". ") + ".";
+			}
+			if (parsed.response?.checks?.length) {
+				return parsed.response.checks.map(c => c.message).filter(Boolean).join(". ") + ".";
+			}
+		} catch {
+			// not JSON, use as-is
+		}
+		return summary;
 	}
 
 	function formatDate(dateStr) {
@@ -148,10 +173,7 @@
 <div class="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-purple-50/40 text-slate-900">
 	<div class="mx-auto w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
 		{#if loading}
-			<div class="flex min-h-[70vh] flex-col items-center justify-center gap-3 rounded-3xl border border-white/70 bg-white/80 shadow-sm backdrop-blur">
-				<span class="loading loading-spinner loading-lg text-purple-600"></span>
-				<span class="text-sm text-slate-500">Loading application details...</span>
-			</div>
+			<PageLoader message="Loading application details..." />
 		{:else if !application}
 			<div class="flex min-h-[70vh] items-center justify-center rounded-3xl border border-white/70 bg-white/80 p-12 text-center shadow-sm backdrop-blur">
 				<div class="max-w-md space-y-4">
@@ -241,9 +263,7 @@
 								<div class="mt-6 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-purple-50 via-white to-blue-50 p-5 sm:p-6">
 									<div class="mb-4 flex items-center justify-between">
 										<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Quiz Results</h2>
-										<span class="badge badge-lg {getVal(application, 'QuizPassed', 'quiz_passed') ? 'badge-success' : 'badge-error'} border-none px-3 py-2 font-medium">
-											{getVal(application, 'QuizPassed', 'quiz_passed') ? 'Passed' : 'Failed'}
-										</span>
+										<PassFailBadge score={getVal(application, 'QuizScore', 'quiz_score') || 0} passingThreshold={50} />
 									</div>
 									<div class="grid gap-4 md:grid-cols-2">
 										<div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
@@ -306,30 +326,25 @@
 							<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</h2>
 						</div>
 						<div class="space-y-3 p-6">
-							<button
-								onclick={rejectApplication}
-								class="btn btn-error btn-block gap-2"
+							<ButtonLoader
+								loading={isProcessing}
 								disabled={isProcessing || (application.Status || application.status) === 'rejected'}
+								onclick={rejectApplication}
+								color="error"
+								variant="outline"
 							>
-								{#if isProcessing}
-									<span class="loading loading-spinner loading-sm"></span>
-								{:else}
-									<X size={18} />
-								{/if}
+								<X size={18} />
 								Reject Application
-							</button>
-							<button
-								onclick={acceptApplication}
-								class="btn btn-success btn-block gap-2"
+							</ButtonLoader>
+							<ButtonLoader
+								loading={isProcessing}
 								disabled={isProcessing || (application.Status || application.status) === 'accepted'}
+								onclick={acceptApplication}
+								color="success"
 							>
-								{#if isProcessing}
-									<span class="loading loading-spinner loading-sm"></span>
-								{:else}
-									<Check size={18} />
-								{/if}
+								<Check size={18} />
 								Accept Application
-							</button>
+							</ButtonLoader>
 						</div>
 					</div>
 
@@ -345,6 +360,50 @@
 								</div>
 							{:else if intelligenceData}
 								<div class="space-y-4">
+									<!-- ATS Score (compact) -->
+									{#if intelligenceData.ats_score}
+										<div class="rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-4 ring-1 ring-slate-200">
+											<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+												<Target size={14} />
+												ATS Score
+											</div>
+											<div class="mt-3 flex items-center gap-4">
+												<div class="flex-1 text-center">
+													<span class="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-4xl font-bold text-transparent">
+														{intelligenceData.ats_score.score ?? 0}
+													</span>
+													<span class="text-lg font-bold text-slate-400">/100</span>
+												</div>
+												{#if intelligenceData.quiz_attempt?.passed !== undefined}
+													<div class="flex items-center gap-1.5 text-sm font-semibold">
+														{#if intelligenceData.quiz_attempt.passed}
+															<span class="flex items-center gap-1 text-emerald-600"><Check size={16} />Passed</span>
+														{:else}
+															<span class="flex items-center gap-1 text-red-500"><X size={16} />Failed</span>
+														{/if}
+													</div>
+												{/if}
+											</div>
+											{#if intelligenceData.ats_score.checks?.length}
+												<div class="mt-3 space-y-1.5 border-t border-white/60 pt-3">
+													{#each intelligenceData.ats_score.checks as check}
+														<div class="flex items-center gap-2 text-xs">
+															{#if check.status === "pass"}
+																<Check size={12} class="shrink-0 text-emerald-500" />
+															{:else if check.status === "warn"}
+																<Loader2 size={12} class="shrink-0 text-amber-500" />
+															{:else}
+																<X size={12} class="shrink-0 text-red-500" />
+															{/if}
+															<span class="text-slate-600 truncate">{check.label}</span>
+														</div>
+													{/each}
+												</div>
+											{/if}
+										</div>
+									{/if}
+
+									
 									<div class="rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 p-4 ring-1 ring-slate-200">
 										<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
 											<GitBranch size={14} />
@@ -440,7 +499,7 @@
 						{#if intelligenceData.ai_summary.summary}
 							<div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200 xl:col-span-2">
 								<p class="text-xs font-medium text-slate-500">Summary</p>
-								<p class="mt-2 break-words text-sm leading-6 text-slate-700">{intelligenceData.ai_summary.summary}</p>
+								<p class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatSummary(intelligenceData.ai_summary.summary)}</p>
 							</div>
 						{/if}
 						{#if intelligenceData.ai_summary.strengths}

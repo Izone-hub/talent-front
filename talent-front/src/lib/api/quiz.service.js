@@ -36,4 +36,33 @@ export const quizService = {
     submitQuiz: async (quizId) => {
         return apiClient.post(`/quizzes/${quizId}/submit`);
     },
+
+		listQuizzes: async () => {
+		return apiClient.get('/quizzes');
+	},
+
+	saveQuizResult: (quizId, data) => {
+		if (typeof window === 'undefined') return;
+		try {
+			localStorage.setItem(`quiz_result_${quizId}`, JSON.stringify(data));
+		} catch (e) {
+			console.warn('Failed to save quiz result locally:', e);
+		}
+	},
+
+	getResult: async (quizId, userId) => {
+		if (typeof window !== 'undefined') {
+			try {
+				const cached = localStorage.getItem(`quiz_result_${quizId}`);
+				if (cached) {
+					const parsed = JSON.parse(cached);
+					return parsed;
+				}
+			} catch (e) {
+				// ignore parse errors
+			}
+		}
+
+		return apiClient.get(`/quizzes/${quizId}/review`);
+	},
 };

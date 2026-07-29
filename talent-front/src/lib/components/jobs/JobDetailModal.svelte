@@ -4,11 +4,42 @@
 	import { auth } from "$lib/stores/authStore";
 	import { jobService } from "$lib/api/job.service";
 	import { cvService } from "$lib/api/cv.service";
+	import { savedJobService } from "$lib/api/savedJob.service";
 	import { showToast } from "$lib/stores/toast";
 
-	let { job = null, modalId = "job-detail-modal", loading = false } = $props();
+	let { job = null, modalId = "job-detail-modal", loading = false, isApplied = false } = $props();
 
 	let applying = $state(false);
+	let isSaved = $state(false);
+	let saving = $state(false);
+
+	$effect(() => {
+		if (job?.id && $auth.isAuthenticated) {
+			savedJobService.isJobSaved(job.id).then((saved) => (isSaved = saved));
+		} else {
+			isSaved = false;
+		}
+	});
+
+	async function toggleSave() {
+		if (!job?.id || saving) return;
+		saving = true;
+		try {
+			if (isSaved) {
+				await savedJobService.unsaveJob(job.id);
+				isSaved = false;
+				showToast("Job removed from saved", "info");
+			} else {
+				await savedJobService.saveJob(job.id);
+				isSaved = true;
+				showToast("Job saved!", "success");
+			}
+		} catch (e) {
+			showToast("Failed to update saved status", "error");
+		} finally {
+			saving = false;
+		}
+	}
 
 	let requirementsList = $derived(
 		job?.requirements
@@ -42,13 +73,18 @@
 			}
 
 			const response = await jobService.applyForJob(job.id);
-			showToast("Successfully applied! Take the quiz to proceed.", "success");
-			if (response?.quiz_id) {
-				window.location.href = `http://localhost:5000/api/v1/quizzes/${response.quiz_id}/question`;
+			if (response?.application_id) {
+				showToast("Successfully applied! Take the quiz to proceed.", "success");
+				if (response?.quiz_id) {
+					goto(`/quizzes/${response.quiz_id}`);
+					return;
+				}
+				goto("/applications");
+			} else {
+				showToast("Unexpected response from server", "error");
+				goto("/applications");
 				return;
 			}
-
-			goto("/applications");
 		} catch (error) {
 			const message = error.message || "Failed to apply for the job";
 
@@ -60,6 +96,7 @@
 				goto("/profile");
 			} else {
 				showToast(message, "error");
+				goto("/applications");
 			}
 		} finally {
 			applying = false;
@@ -104,7 +141,23 @@
 										class="loading loading-spinner loading-xs text-indigo-600"
 									></span>
 								{:else}
-									<Bookmark class="h-5 w-5 text-indigo-600" />
+									<button
+										onclick={toggleSave}
+										disabled={saving}
+										class="cursor-pointer"
+									>
+										{#if saving}
+											<span
+												class="loading loading-spinner loading-xs text-indigo-600"
+											></span>
+										{:else}
+											<Bookmark
+												class="h-5 w-5 {isSaved
+													? 'text-indigo-600 fill-indigo-600'
+													: 'text-indigo-600'}"
+											/>
+										{/if}
+									</button>
 								{/if}
 							</h2>
 							<p
@@ -286,7 +339,27 @@
         pb-6 sm:px-8
       "
 			>
-				{#if $auth.isAuthenticated}
+				{#if isApplied}
+					<div
+						class="btn h-12 w-full cursor-default rounded-lg border border-sky-200 bg-sky-50 text-lg font-semibold text-sky-600 sm:h-13"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-5 w-5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+							/>
+						</svg>
+						You have Applied
+					</div>
+				{:else if $auth.isAuthenticated}
 					<button
 						onclick={handleApply}
 						disabled={applying}

@@ -1,5 +1,28 @@
 <script>
     import { auth } from "$lib/stores/authStore";
+    import { dashboardService } from "$lib/api/dashboard.service";
+    import { onMount } from "svelte";
+
+    let stats = $state({
+        total_users: 0,
+        active_jobs: 0,
+        pending_applications: 0,
+        total_applications: 0,
+        new_users_today: 0,
+        new_applications_today: 0,
+    });
+    let loading = $state(true);
+
+    onMount(async () => {
+        try {
+            const data = await dashboardService.getDashboard();
+            if (data) stats = data;
+        } catch (e) {
+            console.error("Failed to load dashboard stats", e);
+        } finally {
+            loading = false;
+        }
+    });
 </script>
 
 <div class="space-y-6">
@@ -11,31 +34,42 @@
     </header>
 
     <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <!-- Stats Cards -->
         <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
             <div class="text-sm font-medium text-gray-500">Total Users</div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">1,284</div>
-            <div class="mt-2 text-xs text-green-600">+12% from last month</div>
+            <div class="mt-2 text-3xl font-bold text-gray-900">
+                {loading ? "..." : stats.total_users}
+            </div>
+            <div class="mt-2 text-xs text-green-600">
+                {stats.new_users_today || 0} new today
+            </div>
         </div>
 
         <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
             <div class="text-sm font-medium text-gray-500">Active Jobs</div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">45</div>
-            <div class="mt-2 text-xs text-green-600">+5% from last month</div>
+            <div class="mt-2 text-3xl font-bold text-gray-900">
+                {loading ? "..." : stats.active_jobs}
+            </div>
         </div>
 
         <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
             <div class="text-sm font-medium text-gray-500">
                 New Applications
             </div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">128</div>
-            <div class="mt-2 text-xs text-blue-600">Pending review</div>
+            <div class="mt-2 text-3xl font-bold text-gray-900">
+                {loading ? "..." : stats.pending_applications}
+            </div>
+            <div class="mt-2 text-xs text-blue-600">
+                {stats.new_applications_today || 0} today
+            </div>
         </div>
 
         <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="text-sm font-medium text-gray-500">Revenue</div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">$12,450</div>
-            <div class="mt-2 text-xs text-green-600">+8% from last month</div>
+            <div class="text-sm font-medium text-gray-500">
+                Total Applications
+            </div>
+            <div class="mt-2 text-3xl font-bold text-gray-900">
+                {loading ? "..." : stats.total_applications}
+            </div>
         </div>
     </div>
 
