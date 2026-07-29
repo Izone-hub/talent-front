@@ -1,5 +1,4 @@
 <script>
-    import { onMount } from "svelte";
     import { goto } from "$app/navigation";
     import { auth } from "$lib/stores/authStore";
     import { applicationService } from "$lib/api/application.service";
@@ -118,13 +117,17 @@
         }
     }
 
-    onMount(async () => {
+    $effect(() => {
+        if ($auth.loading) return;
         if (!$auth.isAuthenticated) {
             showToast("Please login to view your applications", "warning");
             goto("/auth");
             return;
         }
+        loadApplications();
+    });
 
+    async function loadApplications() {
         try {
             const data = await applicationService.getMyApplications();
             applications = Array.isArray(data) ? data : [];
@@ -134,7 +137,7 @@
         } finally {
             isLoading = false;
         }
-    });
+    }
 </script>
 
 <div class="min-h-screen bg-slate-50 font-sans">
@@ -207,7 +210,7 @@
                                     </button>
                                 {:else if canViewResult(app)}
                                     <button
-                                        onclick={() => goto(`/quizzes/${app.QuizID}/result?application_id=${app.ID}`)}
+                                        onclick={() => goto(`/quizzes/${app.QuizID}/result`)}
                                         class="btn gap-2 border-emerald-600/90 bg-emerald-600 text-white hover:bg-emerald-700"
                                     >
                                         <CheckCircle2 class="h-4 w-4" />
