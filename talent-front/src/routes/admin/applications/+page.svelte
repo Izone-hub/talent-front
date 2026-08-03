@@ -3,7 +3,7 @@
     import { applicationService } from "$lib/api/application.service";
     import { Users } from "lucide-svelte";
     import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
-    import PageLoader from "$lib/components/ui/PageLoader.svelte";
+    import SkeletonTable from "$lib/components/ui/SkeletonTable.svelte";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import { showToast } from "$lib/stores/toast";
     import { goto } from "$app/navigation";
@@ -139,7 +139,14 @@
                 <p class="text-gray-500 text-sm mt-1">Choose a job from the dropdown above to view its applicants.</p>
             </div>
         {:else if loading}
-            <PageLoader message="Loading applications..." />
+            <div role="status" aria-busy="true" aria-label="Loading applications">
+                <SkeletonTable
+                    rows={5}
+                    columns={["Applicant", "Status", "Submitted", "Quiz", "Links"]}
+                    headerBar
+                    firstColumnAvatar
+                />
+            </div>
         {:else if applications.length === 0}
             <EmptyState
                 icon={Users}
@@ -213,7 +220,15 @@
                                     <div class="flex items-center justify-end gap-2">
                                         {#if getVal(app, 'QuizID', 'quiz_id')}
                                             <button
-                                                onclick={() => goto(`/quizzes/${getVal(app, 'QuizID', 'quiz_id')}/result`)}
+                                                onclick={() => {
+                                                    const params = new URLSearchParams({
+                                                        application_id: getVal(app, 'ID', 'id') || "",
+                                                        user_id: getVal(app, 'UserID', 'user_id') || "",
+                                                        job_title: getVal(selectedJob, 'title', 'Title') || "",
+                                                        job_company: getVal(selectedJob, 'company', 'Company') || "",
+                                                    });
+                                                    goto(`/quizzes/${getVal(app, 'QuizID', 'quiz_id')}/result?${params}`);
+                                                }}
                                                 class="btn btn-sm btn-ghost text-emerald-600 hover:bg-emerald-50"
                                             >
                                                 Result
