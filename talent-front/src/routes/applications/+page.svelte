@@ -18,7 +18,6 @@
         AlertTriangle,
         X,
     } from "@lucide/svelte";
-    import PageLoader from "$lib/components/ui/PageLoader.svelte";
 
     let applications = $state([]);
     let isLoading = $state(true);
@@ -152,7 +151,28 @@
         </div>
 
         {#if isLoading}
-            <PageLoader message="Loading your applications..." />
+            <div class="space-y-4" role="status" aria-busy="true" aria-label="Loading your applications">
+                {#each [1, 2, 3] as i}
+                    <div class="rounded-xl border border-slate-200 bg-white p-6">
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <div class="skeleton h-5 w-48"></div>
+                                    <div class="skeleton h-5 w-16 rounded-full"></div>
+                                </div>
+                                <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                    <div class="skeleton h-3 w-32"></div>
+                                    <div class="skeleton h-3 w-24"></div>
+                                    <div class="skeleton h-3 w-20"></div>
+                                </div>
+                            </div>
+                            <div class="flex shrink-0 gap-2">
+                                <div class="skeleton h-10 w-28 rounded-lg"></div>
+                            </div>
+                        </div>
+                    </div>
+                {/each}
+            </div>
         {:else if applications.length === 0}
             <div class="rounded-2xl border border-slate-200 bg-white py-20 text-center">
                 <Briefcase class="mx-auto mb-4 h-12 w-12 text-slate-300" />
@@ -210,7 +230,14 @@
                                     </button>
                                 {:else if canViewResult(app)}
                                     <button
-                                        onclick={() => goto(`/quizzes/${app.QuizID}/result`)}
+                                        onclick={() => {
+                                            const params = new URLSearchParams({
+                                                application_id: app.ID,
+                                                job_title: app.JobTitle || "",
+                                                job_company: app.JobCompany || "",
+                                            });
+                                            goto(`/quizzes/${app.QuizID}/result?${params}`);
+                                        }}
                                         class="btn gap-2 border-emerald-600/90 bg-emerald-600 text-white hover:bg-emerald-700"
                                     >
                                         <CheckCircle2 class="h-4 w-4" />
