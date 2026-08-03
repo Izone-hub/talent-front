@@ -25,9 +25,13 @@
         activityError = "";
         try {
             const data = await dashboardService.getRecentActivity(10, p);
-            if (data && Array.isArray(data.items)) {
-                activity = data.items;
-                totalPages = data.total_pages || 0;
+            // The backend returns a BARE ARRAY (original design). Accept both
+            // that and the paginated { items, total_pages } shape so the list
+            // renders regardless of which backend variant is running.
+            const items = Array.isArray(data) ? data : data?.items;
+            if (Array.isArray(items)) {
+                activity = items;
+                totalPages = data?.total_pages || 0;
             }
         } catch (e) {
             activityError = e.message || "Failed to load recent activity";
