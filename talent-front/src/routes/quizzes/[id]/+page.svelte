@@ -325,7 +325,11 @@
             const wrong = userAnswers.filter(a => !a.is_correct && !a.is_skipped).length;
             const skipped = userAnswers.filter(a => a.is_skipped).length;
             const timeSpent = userAnswers.reduce((s, a) => s + (a.time_spent_seconds || 0), 0);
-            const totalQuestions = userAnswers.length;
+            // Use the quiz's real question count as the denominator, not just the
+            // answers saved in THIS session. When a quiz is resumed (reload, new
+            // tab, timeout), earlier answers exist only in the backend, so counting
+            // only session answers would inflate the score.
+            const totalQuestions = Math.max(userAnswers.length, getQuizQuestionCount());
             const score = totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0;
             quizService.saveQuizResult(quizId, {
                 title: quiz?.title || 'Technical Assessment',
