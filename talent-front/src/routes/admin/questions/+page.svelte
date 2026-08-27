@@ -4,150 +4,159 @@
     import {
         Plus,
         Search,
-        Filter,
-        FileDown,
         Eye,
-        Edit2,
         Trash2,
         Star,
-        Clock,
-        Users,
-        ChevronLeft,
+        ChevronDown,
         ChevronRight,
-        AlertCircle,
-        HelpCircle,
         Code2,
-        CheckSquare,
-        ToggleLeft,
+        XCircle,
+        HelpCircle,
+        Check,
+        ListChecks,
+        Terminal,
     } from "lucide-svelte";
     import { showToast } from "$lib/stores/toast";
-    import SkeletonTable from "$lib/components/ui/SkeletonTable.svelte";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import CreateQuestionModal from "$lib/components/modals/admin/question/CreateQuestionModal.svelte";
     import QuestionDetailModal from "$lib/components/modals/admin/question/QuestionDetailModal.svelte";
     import DeleteConfirmationModal from "$lib/components/modals/admin/common/DeleteConfirmationModal.svelte";
+    import TestCodingModal from "$lib/components/modals/admin/question/TestCodingModal.svelte";
 
-    let questions = [];
-    let loading = true;
-    let isCreateModalOpen = false;
-    let isDetailModalOpen = false;
-    let selectedQuestionId = null;
-    let searchQuery = "";
-    let selectedIds = new Set();
-    let filterType = "All Types";
-    let filterDifficulty = "All Difficulties";
-    let filterStatus = "Active";
-    let isEditing = false;
-    let editableData = null;
-    let sortBy = "Newest first";
+    let questions = $state([]);
+    let allQuestions = $state([]);
+    let loading = $state(true);
+    let isCreateModalOpen = $state(false);
+    let isDetailModalOpen = $state(false);
+    let selectedQuestionId = $state(null);
+    let searchQuery = $state("");
+    let expandedTypes = $state(new Set(["multiple_choice", "true_false", "coding_challenge"]));
+    let expandedLevels = $state(new Set());
 
-    // Delete confirmation state
-    let isDeleteModalOpen = false;
-    let deleteLoading = false;
-    let deleteTarget = null; // { type: 'single' | 'bulk', id?: string }
-    let deleteMessage = "";
-    let deleteTitle = "";
+    let isTestCodingModalOpen = $state(false);
+    let isDeleteModalOpen = $state(false);
+    let deleteLoading = $state(false);
+    let deleteTarget = $state(null);
+    let deleteMessage = $state("");
+    let deleteTitle = $state("");
 
-    onMount(async () => {
-        await loadQuestions();
+    const levels = [
+        { value: "easy", label: "Easy" },
+        { value: "medium", label: "Medium" },
+        { value: "hard", label: "Hard" },
+        { value: "expert", label: "Expert" },
+    ];
+
+    onMount(() => {
+        loadQuestions();
     });
 
     async function loadQuestions() {
         loading = true;
         try {
-            questions = await questionService.listQuestions();
+            const response = await questionService.listQuestions(200, 0, "");
+            allQuestions = response?.questions || [];
         } catch (error) {
             showToast("Failed to load questions", "error");
-            console.error(error);
         } finally {
             loading = false;
         }
     }
 
-    async function handleCreateQuestion(event) {
-        const questionData = event.detail;
-        try {
-            await questionService.createQuestion(questionData);
-            showToast("Question created successfully", "success");
-            isCreateModalOpen = false;
-            await loadQuestions();
-        } catch (error) {
-            showToast("Failed to create question", "error");
+    function typeCfg(type) {
+        switch (type?.toLowerCase()) {
+            case "multiple_choice": return { label: "Multiple Choice", icon: ListChecks, bg: "bg-indigo-50", text: "text-indigo-600", ring: "ring-indigo-100" };
+            case "true_false": return { label: "True / False", icon: Check, bg: "bg-blue-50", text: "text-blue-600", ring: "ring-blue-100" };
+            case "coding_challenge": return { label: "Coding", icon: Terminal, bg: "bg-gray-100", text: "text-gray-700", ring: "ring-gray-200" };
+            default: return { label: type || "Other", icon: HelpCircle, bg: "bg-gray-100", text: "text-gray-600", ring: "ring-gray-200" };
         }
     }
 
-    function toggleSelectAll(event) {
-        if (event.target.checked) {
-            selectedIds = new Set(questions.map((q) => q.id));
-        } else {
-            selectedIds = new Set();
+    function levelCfg(level) {
+        switch (level?.toLowerCase()) {
+            case "easy": return { label: "Easy", dot: "bg-emerald-500", text: "text-emerald-600", bg: "bg-emerald-50" };
+            case "medium": return { label: "Medium", dot: "bg-amber-500", text: "text-amber-600", bg: "bg-amber-50" };
+            case "hard": return { label: "Hard", dot: "bg-rose-500", text: "text-rose-600", bg: "bg-rose-50" };
+            case "expert": return { label: "Expert", dot: "bg-purple-500", text: "text-purple-600", bg: "bg-purple-50" };
+            default: return { label: "Other", dot: "bg-gray-400", text: "text-gray-500", bg: "bg-gray-50" };
         }
     }
 
-    async function toggleSelect(id) {
-        if (selectedIds.has(id)) {
-            selectedIds.delete(id);
-        } else {
-            selectedIds.add(id);
+    let tree = $derived(buildTree());
+
+    function buildTree() {
+        const q = searchQuery.trim()
+            ? allQuestions.filter((item) =>
+                  item.question_text?.toLowerCase().includes(searchQuery.trim().toLowerCase())
+              )
+            : allQuestions;
+
+        const order = ["multiple_choice", "true_false", "coding_challenge"];
+        const byType = new Map();
+        for (const item of q) {
+            const type = item.question_type || "other";
+            if (!byType.has(type)) byType.set(type, []);
+            byType.get(type).push(item);
         }
-        selectedIds = selectedIds; // Trigger reactivity
-    }
 
-    function openDeleteModal(id) {
-        deleteTarget = { type: "single", id };
-        deleteTitle = "Delete Question";
-        deleteMessage =
-            "Are you sure you want to delete this question? This will remove it permanently from the question bank.";
-        isDeleteModalOpen = true;
-    }
+        const nodes = [];
+        const sortedTypes = [...byType.keys()].sort((a, b) => {
+            const ia = order.indexOf(a);
+            const ib = order.indexOf(b);
+            return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
 
-    function openBulkDeleteModal() {
-        deleteTarget = { type: "bulk" };
-        deleteTitle = "Bulk Delete Questions";
-        deleteMessage = `Are you sure you want to delete ${selectedIds.size} questions? This action cannot be undone.`;
-        isDeleteModalOpen = true;
-    }
-
-    async function handleConfirmDelete() {
-        deleteLoading = true;
-        try {
-            if (deleteTarget.type === "single") {
-                await questionService.deleteQuestion(deleteTarget.id);
-                showToast("Question deleted successfully", "success");
-            } else {
-                let successCount = 0;
-                let failCount = 0;
-
-                for (const id of selectedIds) {
-                    try {
-                        await questionService.deleteQuestion(id);
-                        successCount++;
-                    } catch (error) {
-                        failCount++;
-                    }
-                }
-
-                if (successCount > 0) {
-                    showToast(
-                        `Successfully deleted ${successCount} questions`,
-                        "success",
-                    );
-                    selectedIds = new Set();
-                }
-                if (failCount > 0) {
-                    showToast(
-                        `Failed to delete ${failCount} questions`,
-                        "error",
-                    );
+        for (const type of sortedTypes) {
+            const typeItems = byType.get(type);
+            const cfg = typeCfg(type);
+            const byLevel = new Map();
+            for (const item of typeItems) {
+                const level = (item.difficulty || "other").toLowerCase();
+                if (!byLevel.has(level)) byLevel.set(level, []);
+                byLevel.get(level).push(item);
+            }
+            const levelNodes = [];
+            for (const lvl of levels) {
+                const lvlItems = byLevel.get(lvl.value);
+                if (lvlItems && lvlItems.length) {
+                    const lcfg = levelCfg(lvl.value);
+                    levelNodes.push({
+                        value: lvl.value,
+                        label: lcfg.label,
+                        dot: lcfg.dot,
+                        text: lcfg.text,
+                        bg: lcfg.bg,
+                        questions: lvlItems,
+                    });
                 }
             }
-            await loadQuestions();
-            isDeleteModalOpen = false;
-        } catch (error) {
-            showToast("Failed to delete question", "error");
-        } finally {
-            deleteLoading = false;
+            if (byLevel.has("other")) {
+                levelNodes.push({
+                    value: "other",
+                    label: "Other",
+                    dot: "bg-gray-400",
+                    text: "text-gray-500",
+                    bg: "bg-gray-50",
+                    questions: byLevel.get("other"),
+                });
+            }
+            nodes.push({ value: type, label: cfg.label, icon: cfg.icon, bg: cfg.bg, text: cfg.text, ring: cfg.ring, levels: levelNodes, count: typeItems.length });
         }
+        return nodes;
+    }
+
+    function toggleType(type) {
+        const next = new Set(expandedTypes);
+        if (next.has(type)) next.delete(type);
+        else next.add(type);
+        expandedTypes = next;
+    }
+
+    function toggleLevel(key) {
+        const next = new Set(expandedLevels);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        expandedLevels = next;
     }
 
     function openDetailModal(id) {
@@ -155,400 +164,198 @@
         isDetailModalOpen = true;
     }
 
-    function getTypeIcon(type) {
-        switch (type?.toLowerCase()) {
-            case "multiple_choice":
-                return HelpCircle;
-            case "true_false":
-                return ToggleLeft;
-            case "coding_challenge":
-                return Code2;
-            case "multiple_select":
-                return CheckSquare;
-            default:
-                return HelpCircle;
+    function openDeleteModal(id) {
+        deleteTarget = { type: "single", id };
+        deleteTitle = "Delete Question";
+        deleteMessage = "Are you sure? This will permanently remove this question.";
+        isDeleteModalOpen = true;
+    }
+
+    async function handleConfirmDelete() {
+        deleteLoading = true;
+        try {
+            await questionService.deleteQuestion(deleteTarget.id);
+            showToast("Question deleted", "success");
+            await loadQuestions();
+            isDeleteModalOpen = false;
+        } catch (error) {
+            showToast("Failed to delete", "error");
+        } finally {
+            deleteLoading = false;
         }
     }
 
-    function getTypeColors(type) {
-        switch (type?.toLowerCase()) {
-            case "multiple_choice":
-                return "bg-indigo-50 text-indigo-600 border-indigo-100";
-            case "true_false":
-                return "bg-blue-50 text-blue-600 border-blue-100";
-            case "coding_challenge":
-                return "bg-slate-900 text-slate-100 border-slate-800";
-            case "multiple_select":
-                return "bg-purple-50 text-purple-600 border-purple-100";
-            default:
-                return "bg-gray-50 text-gray-600 border-gray-100";
+    async function handleCreateQuestion(event) {
+        try {
+            await questionService.createQuestion(event.detail);
+            showToast("Question created successfully", "success");
+            isCreateModalOpen = false;
+            await loadQuestions();
+        } catch (error) {
+            showToast("Failed to create question", "error");
         }
     }
-
-    function getDifficultyColors(diff) {
-        switch (diff?.toLowerCase()) {
-            case "easy":
-                return "text-emerald-500";
-            case "medium":
-                return "text-amber-500";
-            case "hard":
-                return "text-rose-500";
-            case "expert":
-                return "text-purple-600";
-            default:
-                return "text-gray-500";
-        }
-    }
-
-    $: filteredQuestions = questions.filter((q) => {
-        const matchesSearch =
-            q.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            q.id?.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesSearch;
-    });
-
-    $: allSelected =
-        questions.length > 0 && selectedIds.size === questions.length;
 </script>
 
-<div class=" max-w-[1600px] mx-auto space-y-6">
+<div class="max-w-5xl mx-auto space-y-6">
     <!-- Header -->
-    <div
-        class="flex flex-col md:flex-row md:items-center justify-between gap-4"
-    >
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-            <div class="flex items-center gap-3">
-                <h1 class="text-xl font-semibold text-gray-900 tracking-tight">
-                    Question Bank
-                </h1>
-                <span
-                    class="bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full text-xs font-bold ring-1 ring-inset ring-indigo-700/10"
-                >
-                    {questions.length} Questions
-                </span>
-            </div>
-            <p class="text-gray-500 mt-1 text-sm">
-                Browse, filter, and manage all questions in your question bank.
-            </p>
+            <h1 class="text-2xl font-semibold text-gray-900 tracking-tight">Question Bank</h1>
+            <p class="text-gray-500 mt-0.5 text-sm">{allQuestions.length} questions</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
             <button
-                class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-6 shadow-none"
+                class="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-semibold transition-colors"
+                onclick={() => (isTestCodingModalOpen = true)}
+            >
+                <Code2 size={16} />
+                Test Coding
+            </button>
+            <button
+                class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
                 onclick={() => (isCreateModalOpen = true)}
             >
-                <Plus size={18} />
-                Create Question
+                <Plus size={16} />
+                Create
             </button>
         </div>
     </div>
 
-    <!-- Filters & Search -->
-    <div
-        class="flex flex-col lg:flex-row items-center gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.07)]"
-    >
-        <div class="relative flex-1 group">
-            <Search
-                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors"
-                size={19}
-            />
-            <input
-                type="text"
-                placeholder="Search questions..."
-                class="w-full pl-12 pr-4 py-3 bg-transparent text-[15px] font-medium focus:outline-none placeholder:text-gray-400 transition-all"
-                bind:value={searchQuery}
-            />
-        </div>
-
-        <div class="hidden lg:block h-8 w-px bg-gray-100 mx-2"></div>
-
-        <div class="flex flex-wrap items-center gap-2 p-1">
-            <button
-                class="flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-bold text-gray-600 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition-all"
-            >
-                <HelpCircle size={17} class="text-gray-400" />
-                {filterType}
-                <ChevronLeft
-                    size={16}
-                    class="-rotate-90 text-gray-400 opacity-60"
-                />
-            </button>
-            <button
-                class="flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-bold text-gray-600 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition-all"
-            >
-                <Filter size={17} class="text-gray-400" />
-                {filterDifficulty}
-                <ChevronLeft
-                    size={16}
-                    class="-rotate-90 text-gray-400 opacity-60"
-                />
-            </button>
-            <button
-                class="flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-bold text-gray-600 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition-all"
-            >
-                <Users size={17} class="text-gray-400" />
-                {filterStatus}
-                <ChevronLeft
-                    size={16}
-                    class="-rotate-90 text-gray-400 opacity-60"
-                />
-            </button>
-
-            <div class="h-6 w-px bg-gray-100 mx-1 hidden xl:block"></div>
-
-            <button
-                class="flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-bold text-gray-600 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition-all"
-            >
-                <Clock size={17} class="text-gray-400" />
-                {sortBy}
-                <ChevronLeft
-                    size={16}
-                    class="-rotate-90 text-gray-400 opacity-60"
-                />
-            </button>
-        </div>
-    </div>
-
-    <!-- Table -->
-    {#if loading}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <SkeletonTable rows={5} cols={8} />
-    </div>
-    {:else if filteredQuestions.length === 0}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <EmptyState
-            icon={HelpCircle}
-            title="No questions found"
-            description={searchQuery
-                ? "We couldn't find any questions matching your search criteria."
-                : "Your question bank is empty. Start by creating your first question."}
+    <!-- Search -->
+    <div class="relative">
+        <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+        <input
+            type="text"
+            placeholder="Search questions..."
+            class="w-full pl-10 pr-9 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            bind:value={searchQuery}
         />
+        {#if searchQuery}
+            <button
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded"
+                onclick={() => (searchQuery = "")}
+            >
+                <XCircle size={16} />
+            </button>
+        {/if}
     </div>
-    {:else}
-    <div
-        class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm h-[calc(100vh-200px)] overflow-y-auto"
-    >
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr
-                        class="bg-gray-50/50 text-[11px] font-bold text-gray-500 uppercase tracking-widest border-b border-gray-100"
-                    >
-                        <th class="pl-6 py-4 w-12">
-                            <input
-                                type="checkbox"
-                                class="checkbox checkbox-xs border-gray-300 focus:ring-indigo-500 rounded text-indigo-600"
-                                checked={allSelected}
-                                onchange={toggleSelectAll}
-                            />
-                        </th>
-                        <th class="px-4 py-4 min-w-[300px]">Question</th>
-                        <th class="px-4 py-4">Type</th>
-                        <th class="px-4 py-4">Difficulty</th>
-                        <th class="px-4 py-4">Points</th>
-                        <th class="px-4 py-4">Time Limit</th>
-                        <th class="px-4 py-4">Usage</th>
-                        <th class="px-4 py-4">Status</th>
-                        <th class="pr-6 py-4 text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-50">
-                    {#each filteredQuestions as q}
-                            {@const TypeIcon = getTypeIcon(q.question_type)}
-                            <tr
-                                class="hover:bg-gray-50/30 transition-colors group"
-                                class:bg-indigo-50={selectedIds.has(q.id)}
-                            >
-                                <td class="pl-6 py-5">
-                                    <input
-                                        type="checkbox"
-                                        class="checkbox checkbox-xs border-gray-300 focus:ring-indigo-500 rounded text-indigo-600"
-                                        checked={selectedIds.has(q.id)}
-                                        onchange={() => toggleSelect(q.id)}
-                                    />
-                                </td>
-                                <td class="px-4 py-5">
-                                    <div class="flex items-start gap-3">
-                                        <div
-                                            class="w-9 h-9 flex-shrink-0 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center"
-                                        >
-                                            <TypeIcon size={18} />
-                                        </div>
-                                        <div class="flex flex-col gap-1">
-                                            <span
-                                                class="text-[13.5px] font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors leading-snug"
-                                            >
-                                                {q.question_text}
-                                            </span>
-                                            <div
-                                                class="flex items-center gap-2 flex-wrap"
-                                            >
-                                                <span
-                                                    class="text-[10px] text-gray-400 font-mono"
-                                                    ># {q.id?.substring(
-                                                        0,
-                                                        8,
-                                                    )}</span
-                                                >
-                                                {#each q.tags || [] as tag}
-                                                    <span
-                                                        class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[9px] uppercase font-bold tracking-wider"
-                                                        >{tag}</span
-                                                    >
-                                                {/each}
-                                                {#if q.warning}
-                                                    <span
-                                                        class="flex items-center gap-1 text-[9px] text-amber-500 font-bold bg-amber-50 px-1.5 py-0.5 rounded uppercase tracking-wider"
-                                                    >
-                                                        <AlertCircle
-                                                            size={10}
-                                                        />
-                                                        {q.warning}
-                                                    </span>
-                                                {/if}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-4 py-5">
-                                    <span
-                                        class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border {getTypeColors(
-                                            q.question_type,
-                                        )}"
-                                    >
-                                        <span
-                                            class="w-1.5 h-1.5 rounded-full bg-current opacity-70"
-                                        ></span>
-                                        {q.question_type?.replace("_", " ")}
-                                    </span>
-                                </td>
-                                <td class="px-4 py-5">
-                                    <div
-                                        class="flex items-center gap-2 text-sm font-semibold {getDifficultyColors(
-                                            q.difficulty,
-                                        )}"
-                                    >
-                                        <span
-                                            class="w-1.5 h-1.5 rounded-full bg-current"
-                                        ></span>
-                                        {q.difficulty}
-                                    </div>
-                                </td>
-                                <td
-                                    class="px-4 py-5 font-bold text-gray-700 text-sm"
-                                >
-                                    <div class="flex items-center gap-1.5">
-                                        <Star
-                                            size={16}
-                                            class="text-amber-400 fill-amber-400"
-                                        />
-                                        {q.points || 0}
-                                    </div>
-                                </td>
-                                <td
-                                    class="px-4 py-5 text-gray-500 text-sm font-medium"
-                                >
-                                    <div class="flex items-center gap-1.5">
-                                        <Clock size={15} class="opacity-40" />
-                                        {q.time_limit_seconds || 0}s
-                                    </div>
-                                </td>
-                                <td
-                                    class="px-4 py-5 text-gray-500 text-sm font-medium"
-                                >
-                                    <div class="flex items-center gap-1.5">
-                                        <Users size={15} class="opacity-40" />
-                                        {q.usage_count || 0}
-                                    </div>
-                                </td>
-                                <td class="px-4 py-5">
-                                    <span
-                                        class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold"
-                                    >
-                                        <span
-                                            class="w-1.5 h-1.5 rounded-full bg-emerald-500"
-                                        ></span>
-                                        Active
-                                    </span>
-                                </td>
-                                <td class="pr-6 py-5">
-                                    <div
-                                        class="flex items-center justify-center gap-2"
-                                    >
-                                        <button
-                                            class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                            title="View details"
-                                            onclick={() =>
-                                                openDetailModal(q.id)}
-                                        >
-                                            <Eye size={18} />
-                                        </button>
-                                        <button
-                                            class="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                            title="Delete question"
-                                            onclick={() =>
-                                                openDeleteModal(q.id)}
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        {/each}
-                </tbody>
-            </table>
-        </div>
 
-        <!-- Pagination & Selected Items footer -->
-        <div
-            class="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between"
-        >
-            <div class="flex items-center gap-4">
-                <span class="text-xs font-medium text-gray-400">
-                    Showing {filteredQuestions.length} of {questions.length} questions
-                </span>
-
-                {#if selectedIds.size > 0}
-                    <div
-                        class="flex items-center gap-2 pl-4 border-l border-gray-200"
-                    >
-                        <span
-                            class="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-bold"
-                        >
-                            {selectedIds.size} selected
-                        </span>
-                        <button
-                            class="text-[10px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 transition-colors uppercase tracking-wider"
-                            onclick={openBulkDeleteModal}
-                        >
-                            Delete selected
-                        </button>
+    <!-- Tree -->
+    {#if loading}
+        <div class="space-y-2">
+            {#each Array(4) as _}
+                <div class="bg-white border border-gray-100 rounded-lg p-4 animate-pulse">
+                    <div class="flex gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-gray-100"></div>
+                        <div class="flex-1">
+                            <div class="h-3 bg-gray-100 rounded w-1/3 mb-2"></div>
+                            <div class="h-2 bg-gray-50 rounded w-2/3"></div>
+                        </div>
                     </div>
-                {/if}
-            </div>
-
-            <div class="flex items-center gap-2">
-                <button
-                    class="p-2 border border-gray-200 rounded-lg hover:bg-white text-gray-400 transition-colors"
-                    disabled
-                >
-                    <ChevronLeft size={18} />
-                </button>
-                <div class="flex items-center gap-1">
-                    <button
-                        class="w-9 h-9 flex items-center justify-center rounded-lg font-bold text-sm bg-indigo-600 text-white shadow-sm ring-1 ring-indigo-600"
-                    >
-                        1
-                    </button>
                 </div>
-                <button
-                    class="p-2 border border-gray-200 rounded-lg hover:bg-white text-gray-400 transition-colors"
-                    disabled
-                >
-                    <ChevronRight size={18} />
-                </button>
-            </div>
+            {/each}
         </div>
-    </div>
+    {:else if tree.length === 0}
+        <div class="bg-white rounded-lg border border-gray-100 p-12">
+            <EmptyState
+                icon={HelpCircle}
+                title="No questions found"
+                description={searchQuery ? "Try a different search term" : "Create your first question to get started"}
+            />
+        </div>
+    {:else}
+        <!-- Level 1: Question Type -->
+        <div class="space-y-3">
+            {#each tree as typeNode}
+                {@const isTypeOpen = expandedTypes.has(typeNode.value)}
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <button
+                        class="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                        onclick={() => toggleType(typeNode.value)}
+                    >
+                        {#if isTypeOpen}
+                            <ChevronDown size={16} class="text-gray-400 shrink-0" />
+                        {:else}
+                            <ChevronRight size={16} class="text-gray-400 shrink-0" />
+                        {/if}
+                        <span class="w-8 h-8 rounded-lg {typeNode.bg} flex items-center justify-center shrink-0">
+                            <typeNode.icon size={16} class={typeNode.text} />
+                        </span>
+                        <span class="flex-1 font-semibold text-gray-800">{typeNode.label}</span>
+                        <span class="text-xs font-semibold text-gray-400">{typeNode.count}</span>
+                    </button>
+
+                    {#if isTypeOpen}
+                        <div class="border-t border-gray-100">
+                            <!-- Level 2: Difficulty -->
+                            <div class="space-y-1 p-2">
+                                {#each typeNode.levels as levelNode}
+                                    {@const levelKey = `${typeNode.value}:${levelNode.value}`}
+                                    {@const isLevelOpen = expandedLevels.has(levelKey)}
+                                    <div>
+                                        <button
+                                            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                                            onclick={() => toggleLevel(levelKey)}
+                                        >
+                                            {#if isLevelOpen}
+                                                <ChevronDown size={14} class="text-gray-400 shrink-0" />
+                                            {:else}
+                                                <ChevronRight size={14} class="text-gray-400 shrink-0" />
+                                            {/if}
+                                            <span class="w-2 h-2 rounded-full {levelNode.dot} shrink-0"></span>
+                                            <span class="flex-1 text-sm font-medium text-gray-700">{levelNode.label}</span>
+                                            <span class="text-xs font-medium text-gray-400">{levelNode.questions.length}</span>
+                                        </button>
+
+                                        {#if isLevelOpen}
+                                            <!-- Level 3: Compact cards -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pl-9 pr-2 pb-2">
+                                                {#each levelNode.questions as q (q.id)}
+                                                    <div class="group flex items-center gap-3 bg-gray-50 hover:bg-white border border-gray-100 hover:border-indigo-200 rounded-lg px-3 py-2.5 transition-colors">
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-sm font-medium text-gray-800 truncate">{q.question_text}</p>
+                                                            <div class="flex items-center gap-2 mt-1">
+                                                                {#each (q.tags || []).slice(0, 2) as tag}
+                                                                    <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{tag}</span>
+                                                                {/each}
+                                                                <span class="flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                                                                    <Star size={11} class="fill-amber-400 text-amber-400" />
+                                                                    {q.points || 0}
+                                                                </span>
+                                                                {#if q.warning}
+                                                                    <span class="text-[10px] font-medium text-amber-600">{q.warning}</span>
+                                                                {/if}
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-1 shrink-0">
+                                                            <button
+                                                                class="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                                                title="View"
+                                                                onclick={() => openDetailModal(q.id)}
+                                                            >
+                                                                <Eye size={15} />
+                                                            </button>
+                                                            <button
+                                                                class="p-1.5 text-gray-300 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                                                                title="Delete"
+                                                                onclick={() => openDeleteModal(q.id)}
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                {/each}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+            {/each}
+        </div>
     {/if}
 </div>
 
@@ -561,13 +368,8 @@
 <QuestionDetailModal
     isOpen={isDetailModalOpen}
     questionId={selectedQuestionId}
-    on:close={() => {
-        isDetailModalOpen = false;
-        selectedQuestionId = null;
-    }}
-    on:updated={() => {
-        loadQuestions();
-    }}
+    on:close={() => { isDetailModalOpen = false; selectedQuestionId = null; }}
+    on:updated={() => loadQuestions()}
 />
 
 <DeleteConfirmationModal
@@ -579,12 +381,7 @@
     on:confirm={handleConfirmDelete}
 />
 
-<style>
-    :global(.checkbox) {
-        border-width: 2px;
-    }
-    :global(.btn) {
-        text-transform: none;
-        letter-spacing: normal;
-    }
-</style>
+<TestCodingModal
+    isOpen={isTestCodingModalOpen}
+    on:close={() => (isTestCodingModalOpen = false)}
+/>

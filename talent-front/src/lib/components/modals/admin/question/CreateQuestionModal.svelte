@@ -14,9 +14,12 @@
         Lightbulb,
         AlertCircle,
         Search,
+        Sparkles,
     } from "lucide-svelte";
     import { onMount } from "svelte";
     import { tagService } from "$lib/api/tag.service";
+    import { questionGenerationService } from "$lib/api/questionGeneration.service";
+    import { showToast } from "$lib/stores/toast";
 
     export let isOpen = false;
 
@@ -47,6 +50,31 @@
     let availableTags = [];
     let showTagDropdown = false;
     let tagSearchQuery = "";
+
+    // SQL question editor state
+    let sqlSchema = "";
+    let sqlSeed = "";
+
+    $: isSqlQuestion =
+        questionData.question_type === "coding_challenge" &&
+        ["sql", "sqlite"].includes(
+            questionData.coding_details.language,
+        );
+
+    function newSqlTestCase() {
+        return {
+            name: "",
+            query: "",
+            run_first: false,
+            expected_rows_text: "",
+            ordered: true,
+            is_hidden: false,
+        };
+    }
+
+    let showAiPrompt = false;
+    let aiPrompt = "";
+    let aiGenerating = false;
 
     onMount(async () => {
         try {
@@ -83,6 +111,45 @@
             submitData.options = ["True", "False"];
         }
 
+        if (
+            questionData.question_type === "coding_challenge" &&
+            isSqlQuestion
+        ) {
+            const tests = [];
+            for (const t of questionData.coding_details.test_cases) {
+                let expected = null;
+                const raw = (t.expected_rows_text || "").trim();
+                if (raw) {
+                    try {
+                        expected = JSON.parse(raw);
+                    } catch {
+                        showToast(
+                            "Expected Rows must be valid JSON in every SQL test case",
+                            "error",
+                        );
+                        return;
+                    }
+                }
+                const entry = { ordered: t.ordered !== false };
+                if (t.name) entry.name = t.name;
+                if (t.run_first) {
+                    entry.verify = t.query;
+                } else {
+                    entry.query = t.query;
+                }
+                if (expected !== null) entry.expected = expected;
+                if (t.is_hidden) entry.is_hidden = true;
+                tests.push(entry);
+            }
+            submitData.coding_details = {
+                ...submitData.coding_details,
+                test_cases: {
+                    database: { schema: sqlSchema, seed: sqlSeed },
+                    tests,
+                },
+            };
+        }
+
         dispatch("submit", submitData);
     }
 
@@ -97,10 +164,37 @@
     }
 
     function addTestCase() {
+        if (isSqlQuestion) {
+            questionData.coding_details.test_cases = [
+                ...questionData.coding_details.test_cases,
+                newSqlTestCase(),
+            ];
+            return;
+        }
         questionData.coding_details.test_cases = [
             ...questionData.coding_details.test_cases,
             { input: "", expected_output: "", is_hidden: false, weight: 1 },
         ];
+    }
+
+    function handleCodingLanguageChange() {
+        const cases = questionData.coding_details.test_cases;
+        if (isSqlQuestion) {
+            // Switching to SQL: replace generic input/output cases with a
+            // fresh SQL-shaped one (unless already SQL-shaped).
+            if (cases.length === 0 || "input" in cases[0]) {
+                questionData.coding_details.test_cases = [newSqlTestCase()];
+            }
+            if (!questionData.coding_details.code_template) {
+                questionData.coding_details.code_template =
+                    "-- Write your SQL here\n";
+            }
+        } else if (cases.length > 0 && !("input" in cases[0])) {
+            // Switching away from SQL: restore the generic shape.
+            questionData.coding_details.test_cases = [
+                { input: "", expected_output: "", is_hidden: false, weight: 1 },
+            ];
+        }
     }
 
     function removeTestCase(index) {
@@ -131,6 +225,75 @@
             questionData.correct_answer = "True";
         }
     }
+
+    async function generateWithAi() {
+        if (!aiPrompt.trim()) return;
+        aiGenerating = true;
+        try {
+            const data = await questionGenerationService.generate(
+                aiPrompt,
+                questionData.question_type || "",
+                questionData.difficulty || "",
+            );
+            let parsed = data.questions;
+            if (parsed && typeof parsed === "object" && parsed.raw) {
+                try { parsed = JSON.parse(parsed.raw); } catch {}
+            }
+            if (parsed && typeof parsed === "object") {
+                if (parsed.question_text) questionData.question_text = parsed.question_text;
+                if (parsed.question_type) questionData.question_type = parsed.question_type;
+                if (parsed.difficulty) questionData.difficulty = parsed.difficulty;
+                if (parsed.options) questionData.options = parsed.options;
+                if (parsed.correct_answer) questionData.correct_answer = parsed.correct_answer;
+                if (parsed.explanation) questionData.explanation = parsed.explanation;
+                if (parsed.points) questionData.points = parsed.points;
+                if (parsed.time_limit_seconds) questionData.time_limit_seconds = parsed.time_limit_seconds;
+                if (parsed.tags) questionData.tags = parsed.tags;
+                if (parsed.coding_details) {
+                    const merged = { ...questionData.coding_details, ...parsed.coding_details };
+                    // AI-generated SQL questions arrive as {database, tests};
+                    // convert them into the editor's row shape.
+                    if (
+                        ["sql", "sqlite"].includes(merged.language) &&
+                        merged.test_cases &&
+                        !Array.isArray(merged.test_cases)
+                    ) {
+                        const doc = merged.test_cases;
+                        sqlSchema = doc.database?.schema || "";
+                        sqlSeed = doc.database?.seed || "";
+                        const tests = Array.isArray(doc.tests) ? doc.tests : [];
+                        merged.test_cases = tests.map((t) => ({
+                            name: t.name || "",
+                            query: t.verify || t.query || "",
+                            run_first: !!t.verify,
+                            expected_rows_text:
+                                JSON.stringify(t.expected_rows ?? t.expected ?? []) || "[]",
+                            ordered: t.ordered !== false,
+                            is_hidden: !!t.is_hidden,
+                        }));
+                        if (merged.test_cases.length === 0) {
+                            merged.test_cases = [newSqlTestCase()];
+                        }
+                    }
+                    questionData.coding_details = merged;
+                }
+            }
+            showAiPrompt = false;
+            aiPrompt = "";
+            showToast("Question generated successfully", "success");
+        } catch (error) {
+            showToast(error.message || "Failed to generate question", "error");
+        } finally {
+            aiGenerating = false;
+        }
+    }
+
+    function handleAiKeydown(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            generateWithAi();
+        }
+    }
 </script>
 
 {#if isOpen}
@@ -149,7 +312,7 @@
         >
             <!-- Header -->
             <div
-                class="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-20"
+                class="px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-20"
             >
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 tracking-tight">
@@ -169,9 +332,9 @@
 
             <!-- Body -->
             <div
-                class="flex-1 overflow-y-auto p-8 bg-slate-50/30 custom-scrollbar"
+                class="flex-1 overflow-y-auto p-6 bg-slate-50/30 custom-scrollbar"
             >
-                <div class="space-y-8">
+                <div class="space-y-6">
                     <!-- Base Info -->
                     <section class="space-y-4">
                         <div class="flex items-center gap-2 mb-2">
@@ -185,7 +348,34 @@
                             >
                                 Basic Information
                             </h3>
+                            <button
+                                type="button"
+                                class="ml-auto text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all"
+                                onclick={() => (showAiPrompt = !showAiPrompt)}
+                            >
+                                <Sparkles size={13} />
+                                Generate with AI
+                            </button>
                         </div>
+
+                        {#if showAiPrompt}
+                            <div class="flex gap-2 items-center p-3 bg-indigo-50 rounded-2xl border border-indigo-100 mb-4">
+                                <input
+                                    type="text"
+                                    class="flex-1 bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-2 text-sm font-medium outline-none transition-all"
+                                    placeholder="e.g. JavaScript closures, React hooks, Big O notation..."
+                                    bind:value={aiPrompt}
+                                    onkeydown={handleAiKeydown}
+                                    disabled={aiGenerating}
+                                />
+                                {#if aiGenerating}
+                                    <span class="loading loading-spinner loading-sm text-indigo-600"></span>
+                                {/if}
+                            </div>
+                            <p class="text-[11px] text-slate-400 -mt-3 mb-3 font-medium">
+                                Press <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold">Enter</kbd> to generate
+                            </p>
+                        {/if}
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="md:col-span-2">
@@ -215,9 +405,6 @@
                                 >
                                     <option value="multiple_choice"
                                         >Multiple Choice</option
-                                    >
-                                    <option value="multiple_select"
-                                        >Multiple Select</option
                                     >
                                     <option value="true_false"
                                         >True / False</option
@@ -296,9 +483,9 @@
                         </div>
 
                         {#if questionData.question_type === "true_false"}
-                            <div
-                                class="bg-white p-6 rounded-2xl border border-slate-100 space-y-4"
-                            >
+                                    <div
+                                        class="bg-white p-5 rounded-2xl border border-slate-100 space-y-4"
+                                    >
                                 <span
                                     class="text-sm font-semibold text-slate-700"
                                     >Correct Answer</span
@@ -350,10 +537,10 @@
                                     </label>
                                 </div>
                             </div>
-                        {:else if questionData.question_type === "multiple_choice" || questionData.question_type === "multiple_select"}
-                            <div
-                                class="bg-white p-6 rounded-2xl border border-slate-100 space-y-4"
-                            >
+                        {:else if questionData.question_type === "multiple_choice"}
+                                    <div
+                                        class="bg-white p-5 rounded-2xl border border-slate-100 space-y-4"
+                                    >
                                 <div class="flex items-center justify-between">
                                     <span
                                         class="text-sm font-semibold text-slate-700"
@@ -369,24 +556,15 @@
                                 <div class="space-y-3">
                                     {#each questionData.options as option, i}
                                         <div class="flex items-center gap-3">
-                                            {#if questionData.question_type === "multiple_choice"}
-                                                <input
-                                                    type="radio"
-                                                    name="correct"
-                                                    value={option}
-                                                    bind:group={
-                                                        questionData.correct_answer
-                                                    }
-                                                    class="radio radio-sm radio-primary"
-                                                />
-                                            {:else}
-                                                <!-- Multiple Select logic would need a different correct_answer structure (array) -->
-                                                <!-- For simplicity in this version, assuming comma-separated or similar -->
-                                                <input
-                                                    type="checkbox"
-                                                    class="checkbox checkbox-sm checkbox-primary rounded"
-                                                />
-                                            {/if}
+                                             <input
+                                                 type="radio"
+                                                 name="correct"
+                                                 value={option}
+                                                 bind:group={
+                                                     questionData.correct_answer
+                                                 }
+                                                 class="radio radio-sm radio-primary"
+                                             />
                                             <input
                                                 type="text"
                                                 bind:value={
@@ -415,9 +593,9 @@
                                 </p>
                             </div>
                         {:else if questionData.question_type === "coding_challenge"}
-                            <div
-                                class="bg-white p-6 rounded-2xl border border-slate-100 space-y-6"
-                            >
+                                    <div
+                                        class="bg-white p-5 rounded-2xl border border-slate-100 space-y-5"
+                                    >
                                 <div
                                     class="grid grid-cols-1 md:grid-cols-2 gap-6"
                                 >
@@ -433,6 +611,7 @@
                                                 questionData.coding_details
                                                     .language
                                             }
+                                            onchange={handleCodingLanguageChange}
                                             class="select select-bordered select-sm w-full rounded-xl"
                                         >
                                             <option value="javascript"
@@ -441,8 +620,19 @@
                                             <option value="python"
                                                 >Python</option
                                             >
+                                            <option value="typescript"
+                                                >TypeScript</option
+                                            >
                                             <option value="golang">Go</option>
                                             <option value="java">Java</option>
+                                            <option value="cpp">C++</option>
+                                            <option value="c">C</option>
+                                            <option value="rust">Rust</option>
+                                            <option value="ruby">Ruby</option>
+                                            <option value="dart">Dart</option>
+                                            <option value="sql"
+                                                >SQL (SQLite)</option
+                                            >
                                         </select>
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
@@ -485,7 +675,9 @@
                                     <label
                                         for="code_template"
                                         class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2"
-                                        >Code Template</label
+                                        >{isSqlQuestion
+                                            ? "Starter SQL (shown to the candidate)"
+                                            : "Code Template"}</label
                                     >
                                     <textarea
                                         id="code_template"
@@ -494,9 +686,53 @@
                                                 .code_template
                                         }
                                         class="textarea textarea-bordered w-full h-48 bg-slate-900 text-slate-100 font-mono text-sm leading-relaxed rounded-2xl"
-                                        placeholder="func solution(n int) int ..."
+                                        placeholder={isSqlQuestion
+                                            ? "-- Write your SQL here"
+                                            : "func solution(n int) int ..."}
                                     ></textarea>
                                 </div>
+
+                                {#if isSqlQuestion}
+                                    <!-- SQL question editor: imported database + query/verify tests -->
+                                    <div class="space-y-4">
+                                        <div
+                                            class="text-xs font-bold text-slate-500 uppercase tracking-wider"
+                                        >
+                                            Imported Database (runs before every
+                                            test)
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label
+                                                    for="sql_schema"
+                                                    class="text-[10px] font-bold text-slate-400 uppercase block mb-1"
+                                                    >Schema (CREATE TABLE …)</label
+                                                >
+                                                <textarea
+                                                    id="sql_schema"
+                                                    bind:value={sqlSchema}
+                                                    spellcheck="false"
+                                                    class="textarea textarea-bordered w-full h-36 bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed rounded-xl"
+                                                    placeholder="CREATE TABLE employees (&#10;  id INTEGER PRIMARY KEY,&#10;  name TEXT NOT NULL,&#10;  salary INTEGER NOT NULL&#10;);"
+                                                ></textarea>
+                                            </div>
+                                            <div>
+                                                <label
+                                                    for="sql_seed"
+                                                    class="text-[10px] font-bold text-slate-400 uppercase block mb-1"
+                                                    >Seed Data (INSERT …)</label
+                                                >
+                                                <textarea
+                                                    id="sql_seed"
+                                                    bind:value={sqlSeed}
+                                                    spellcheck="false"
+                                                    class="textarea textarea-bordered w-full h-36 bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed rounded-xl"
+                                                    placeholder="INSERT INTO employees (id, name, salary) VALUES&#10;  (1, 'Ada', 50000),&#10;  (2, 'Linus', 70000);"
+                                                ></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {/if}
 
                                 <div class="space-y-4">
                                     <div
@@ -505,7 +741,9 @@
                                         <div
                                             class="text-xs font-bold text-slate-500 uppercase tracking-wider"
                                         >
-                                            Test Cases
+                                            {isSqlQuestion
+                                                ? "SQL Test Cases"
+                                                : "Test Cases"}
                                         </div>
                                         <button
                                             onclick={addTestCase}
@@ -514,6 +752,104 @@
                                             <Plus size={14} /> Add Test Case
                                         </button>
                                     </div>
+                                    {#if isSqlQuestion}
+                                        <p class="text-[11px] text-slate-400 font-medium">
+                                            Each test rebuilds the database above, then either runs your
+                                            query directly (read tasks) or applies the candidate's SQL
+                                            first and verifies the resulting table state (write tasks).
+                                            Expected rows are JSON, e.g.
+                                            <code class="font-mono">[["Ada", 55000]]</code> — a single
+                                            value like <code class="font-mono">3</code> also works.
+                                        </p>
+                                        <div class="space-y-4">
+                                            {#each questionData.coding_details.test_cases as testCase, i}
+                                                <div
+                                                    class="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3 relative group"
+                                                >
+                                                    <div class="flex items-center gap-3">
+                                                        <input
+                                                            type="text"
+                                                            bind:value={testCase.name}
+                                                            placeholder="Test name (e.g. dept 2 got a raise)"
+                                                            class="input input-bordered input-xs flex-1 rounded-lg font-medium"
+                                                        />
+                                                        {#if questionData.coding_details.test_cases.length > 1}
+                                                            <button
+                                                                onclick={() => removeTestCase(i)}
+                                                                class="text-slate-400 hover:text-rose-500 transition-colors"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        {/if}
+                                                    </div>
+                                                    <div>
+                                                        <label
+                                                            for="sql_query_{i}"
+                                                            class="text-[10px] font-bold text-slate-400 uppercase block mb-1"
+                                                        >
+                                                            {testCase.run_first
+                                                                ? "Verification Query (run after candidate's SQL)"
+                                                                : "Result Query"}
+                                                        </label>
+                                                        <textarea
+                                                            id="sql_query_{i}"
+                                                            bind:value={testCase.query}
+                                                            spellcheck="false"
+                                                            class="textarea textarea-bordered w-full h-20 bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed rounded-xl"
+                                                            placeholder="SELECT * FROM employees WHERE salary > 50000;"
+                                                        ></textarea>
+                                                    </div>
+                                                    <div class="flex items-center gap-4 flex-wrap">
+                                                        <label class="flex items-center gap-2 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                bind:checked={testCase.run_first}
+                                                                class="checkbox checkbox-xs rounded"
+                                                            />
+                                                            <span class="text-[11px] font-bold text-slate-500"
+                                                                >Run candidate's SQL first (INSERT / UPDATE /
+                                                                DELETE task)</span
+                                                            >
+                                                        </label>
+                                                        <label class="flex items-center gap-2 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                bind:checked={testCase.ordered}
+                                                                class="checkbox checkbox-xs rounded"
+                                                            />
+                                                            <span class="text-[11px] font-bold text-slate-500"
+                                                                >Row order matters</span
+                                                            >
+                                                        </label>
+                                                        <label class="flex items-center gap-2 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                bind:checked={testCase.is_hidden}
+                                                                class="checkbox checkbox-xs rounded"
+                                                            />
+                                                            <span class="text-[11px] font-bold text-slate-500"
+                                                                >Hidden Case</span
+                                                            >
+                                                        </label>
+                                                    </div>
+                                                    <div>
+                                                        <label
+                                                            for="sql_expected_{i}"
+                                                            class="text-[10px] font-bold text-slate-400 uppercase block mb-1"
+                                                            >Expected Rows (JSON)</label
+                                                        >
+                                                        <textarea
+                                                            id="sql_expected_{i}"
+                                                            bind:value={testCase.expected_rows_text}
+                                                            spellcheck="false"
+                                                            class="textarea textarea-bordered w-full h-16 bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed rounded-xl"
+                                                            placeholder='[["Ada", 55000], ["Grace", 66000]]'
+                                                        ></textarea>
+                                                    </div>
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    {:else}
                                     <div class="space-y-4">
                                         {#each questionData.coding_details.test_cases as testCase, i}
                                             <div
@@ -601,6 +937,7 @@
                                             </div>
                                         {/each}
                                     </div>
+                                    {/if}
                                 </div>
                             </div>
                         {/if}
@@ -622,7 +959,7 @@
                         </div>
 
                         <div
-                            class="bg-white p-6 rounded-2xl border border-slate-100 space-y-6"
+                            class="bg-white p-5 rounded-2xl border border-slate-100 space-y-5"
                         >
                             <div>
                                 <label
@@ -735,7 +1072,7 @@
 
             <!-- Footer -->
             <div
-                class="px-8 py-6 border-t border-slate-100 bg-white flex items-center justify-between sticky bottom-0 z-20"
+                class="px-8 py-5 border-t border-slate-100 bg-white flex items-center justify-between sticky bottom-0 z-20"
             >
                 <div class="flex items-center gap-2 text-slate-400">
                     <AlertCircle size={16} />

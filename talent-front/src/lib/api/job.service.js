@@ -25,12 +25,14 @@ import { apiClient } from './client';
 
 export const jobService = {
     /**
-     * Fetch all published jobs
+     * Fetch all published jobs, optionally filtered by category
+     * @param {string} [category] - Job category filter (empty string = all)
      * @returns {Promise<Job[]>}
      */
-    listPublishedJobs: async () => {
+    listPublishedJobs: async (category = '') => {
         try {
-            const response = await apiClient.get('/jobs');
+            const params = category ? `?category=${encodeURIComponent(category)}` : '';
+            const response = await apiClient.get(`/jobs${params}`);
             // User provided response has { jobs: [], total: X, ... }
             return response?.jobs || [];
         } catch (error) {
@@ -61,8 +63,9 @@ export const jobService = {
         return response;
     },
 
-    listMyJobs: async () => {
-        const response = await apiClient.get('/jobs/my');
+    listMyJobs: async (category = '') => {
+        const params = category ? `?category=${encodeURIComponent(category)}` : '';
+        const response = await apiClient.get(`/jobs/my${params}`);
         return response?.jobs || [];
     },
 

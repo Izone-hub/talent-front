@@ -22,6 +22,10 @@
         Plus,
         Trash2,
         Search,
+        Play,
+        Loader2,
+        CheckCircle2,
+        Terminal,
     } from "lucide-svelte";
     import DeleteConfirmationModal from "../common/DeleteConfirmationModal.svelte";
     import { questionService } from "$lib/api/questions.service";
@@ -48,6 +52,15 @@
     let availableTags = [];
     let showTagDropdown = false;
     let tagSearchQuery = "";
+
+    // Code execution state
+    let testCode = "";
+    let testOutput = null;
+    let isRunningCode = false;
+
+    // Auto-validate state
+    let validationResults = null;
+    let isAutoValidating = false;
 
     async function loadQuestion() {
         if (!questionId) return;
@@ -87,6 +100,10 @@
 
     $: if (isOpen && questionId) {
         loadQuestion();
+    }
+
+    $: if (question && question.question_type === "coding_challenge" && question.coding_details?.code_template && !isEditing && !testCode) {
+        testCode = question.coding_details.code_template;
     }
 
     function close() {
@@ -190,6 +207,62 @@
         editableData.tags = editableData.tags.filter((t) => t !== tag);
     }
 
+    function loadTestCode() {
+        const q = question;
+        if (q?.coding_details?.code_template) {
+            testCode = q.coding_details.code_template;
+        }
+        testOutput = null;
+    }
+
+    async function runTestCode() {
+        if (!testCode.trim() || !question?.id) return;
+        isRunningCode = true;
+        testOutput = null;
+        try {
+            const result = await questionService.testQuestion(question.id, testCode);
+            testOutput = result;
+        } catch (error) {
+            testOutput = {
+                stderr: "",
+                stdout: "",
+                exit_code: -1,
+                time_ms: 0,
+                error: error.message || "Failed to execute code",
+            };
+        } finally {
+            isRunningCode = false;
+        }
+    }
+
+    async function autoValidateCode() {
+        if (!testCode.trim() || !question?.id) return;
+        isAutoValidating = true;
+        validationResults = null;
+        try {
+            const result = await questionService.validateQuestion(question.id, testCode);
+            validationResults = result;
+        } catch (error) {
+            validationResults = {
+                all_passed: false,
+                total_passed: 0,
+                total_failed: 0,
+                total_cases: 0,
+                test_results: [],
+                error: error.message || "Validation failed",
+            };
+        } finally {
+            isAutoValidating = false;
+        }
+    }
+
+    function handleTestKeydown(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+            e.preventDefault();
+            runTestCode();
+        }
+    }
+
     function getDifficultyColor(diff) {
         switch (diff?.toLowerCase()) {
             case "easy":
@@ -227,16 +300,16 @@
 
         <!-- Modal -->
         <div
-            class="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative z-20 border border-slate-200/50 transition-all duration-300 scale-100"
+            class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative z-20 border border-slate-200/50 transition-all duration-300 scale-100"
         >
             <!-- Header -->
             <div
-                class="px-10 py-8 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-30"
+                class="px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-30"
             >
                 <div class="flex items-center gap-5">
-                    <div
-                        class="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-inner shadow-indigo-100/50"
-                    >
+                                            <div
+                                                class="p-3 bg-indigo-50 text-indigo-600 rounded-xl shadow-inner shadow-indigo-100/50"
+                                            >
                         <HelpCircle size={24} />
                     </div>
                     <div>
@@ -321,7 +394,7 @@
 
             <!-- Body -->
             <div
-                class="flex-1 overflow-y-auto p-10 bg-slate-50/20 custom-scrollbar"
+                class="flex-1 overflow-y-auto p-8 bg-slate-50/20 custom-scrollbar"
             >
                 {#if loading}
                     <div
@@ -365,11 +438,11 @@
                         >
                     </div>
                 {:else if question}
-                    <div class="space-y-12">
+                    <div class="space-y-8">
                         <!-- Main Content -->
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <!-- Left: Question & Meta -->
-                            <div class="lg:col-span-2 space-y-10">
+                            <div class="lg:col-span-2 space-y-8">
                                 <!-- Question Text -->
                                 <section class="space-y-4">
                                     <div
@@ -413,7 +486,7 @@
                                         {/if}
                                     </div>
                                     <div
-                                        class="p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm relative"
+                                        class="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm relative"
                                     >
                                         {#if isEditing}
                                             <textarea
@@ -441,7 +514,7 @@
                                         Logic & Structure
                                     </h3>
                                     <div
-                                        class="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm"
+                                        class="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm"
                                     >
                                         <!-- Question Type Header -->
                                         <div
@@ -547,7 +620,7 @@
                                         </div>
 
                                         <!-- Options / Details -->
-                                        <div class="p-8 space-y-6">
+                                        <div class="p-6 space-y-6">
                                             {#if (isEditing ? editableData : question).question_type === "coding_challenge"}
                                                 <div class="space-y-4">
                                                     <div
@@ -678,6 +751,161 @@
                                                             {/if}
                                                         </div>
                                                     </div>
+
+                                                    <!-- Run Code Section (view mode only) -->
+                                                    {#if !isEditing}
+                                                        <div class="space-y-3 pt-2">
+                                                            <div class="flex items-center justify-between">
+                                                                <span class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                                                    <Terminal size={16} class="text-indigo-500" />
+                                                                    Test Code
+                                                                </span>
+                                                                <button
+                                                                    onclick={() => { loadTestCode(); }}
+                                                                    class="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all"
+                                                                >
+                                                                    Load Template
+                                                                </button>
+                                                            </div>
+                                                            <textarea
+                                                                bind:value={testCode}
+                                                                onkeydown={handleTestKeydown}
+                                                                class="w-full bg-slate-900 text-emerald-300 font-mono text-sm leading-5 p-4 rounded-2xl border border-slate-800 resize-none focus:outline-none focus:border-indigo-500 min-h-[160px]"
+                                                                placeholder="Write or paste code to test..."
+                                                                spellcheck="false"
+                                                            ></textarea>
+                                                            <div class="flex items-center justify-between">
+                                                                <span class="text-[11px] text-slate-500 font-medium">Ctrl+Enter to run</span>
+                                                                <div class="flex items-center gap-2">
+                                                                    <button
+                                                                        onclick={autoValidateCode}
+                                                                        disabled={isAutoValidating || isRunningCode || !testCode.trim()}
+                                                                        class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-indigo-200"
+                                                                    >
+                                                                        {#if isAutoValidating}
+                                                                            <Loader2 size={15} class="animate-spin" />
+                                                                            Validating...
+                                                                        {:else}
+                                                                            <CheckCircle2 size={15} />
+                                                                            Auto-validate
+                                                                        {/if}
+                                                                    </button>
+                                                                    <button
+                                                                        onclick={runTestCode}
+                                                                        disabled={isRunningCode || isAutoValidating || !testCode.trim()}
+                                                                        class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-200"
+                                                                    >
+                                                                        {#if isRunningCode}
+                                                                            <Loader2 size={15} class="animate-spin" />
+                                                                            Running...
+                                                                        {:else}
+                                                                            <Play size={15} fill="currentColor" />
+                                                                            Run Code
+                                                                        {/if}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Output -->
+                                                            {#if testOutput}
+                                                                <div class="rounded-2xl border border-slate-200 overflow-hidden">
+                                                                    <div class="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                                                                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Output</span>
+                                                                        <div class="flex items-center gap-3">
+                                                                            {#if testOutput.passed !== undefined && testOutput.passed !== null}
+                                                                                <span class="flex items-center gap-1 text-[10px] font-black {testOutput.passed ? 'text-emerald-600' : 'text-rose-500'}">
+                                                                                    {#if testOutput.passed}
+                                                                                        <CheckCircle2 size={11} />
+                                                                                    {:else}
+                                                                                        <AlertCircle size={11} />
+                                                                                    {/if}
+                                                                                    {testOutput.passed ? 'PASSED' : 'FAILED'}
+                                                                                </span>
+                                                                            {/if}
+                                                                            {#if testOutput.exit_code !== undefined && testOutput.exit_code !== null}
+                                                                                <span class="text-[10px] text-slate-400 font-mono">Exit: {testOutput.exit_code}</span>
+                                                                            {/if}
+                                                                            {#if testOutput.time_ms}
+                                                                                <span class="text-[10px] text-slate-400 font-mono">{testOutput.time_ms}ms</span>
+                                                                            {/if}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="p-4 bg-slate-900 min-h-[60px] max-h-[200px] overflow-auto">
+                                                                        {#if testOutput.error}
+                                                                            <pre class="text-rose-400 text-xs font-mono whitespace-pre-wrap break-words">{testOutput.error}</pre>
+                                                                        {:else if testOutput.stderr}
+                                                                            <pre class="text-rose-400 text-xs font-mono whitespace-pre-wrap break-words">{testOutput.stderr}</pre>
+                                                                        {:else if testOutput.stdout}
+                                                                            <pre class="text-emerald-400 text-xs font-mono whitespace-pre-wrap break-words">{testOutput.stdout}</pre>
+                                                                        {:else}
+                                                                            <pre class="text-slate-500 text-xs font-mono">No output</pre>
+                                                                        {/if}
+                                                                    </div>
+                                                                </div>
+                                                            {/if}
+
+                                                            <!-- Auto-validate Results -->
+                                                            {#if validationResults}
+                                                                <div class="rounded-2xl border border-slate-200 overflow-hidden">
+                                                                    <div class="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                                                                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Validation Results</span>
+                                                                        <div class="flex items-center gap-3">
+                                                                            <span class="flex items-center gap-1 text-[10px] font-black {validationResults.all_passed ? 'text-emerald-600' : 'text-rose-500'}">
+                                                                                {#if validationResults.all_passed}
+                                                                                    <CheckCircle2 size={11} />
+                                                                                {:else}
+                                                                                    <AlertCircle size={11} />
+                                                                                {/if}
+                                                                                {validationResults.total_passed}/{validationResults.total_cases} passed
+                                                                            </span>
+                                                                            {#if validationResults.language}
+                                                                                <span class="text-[10px] text-slate-400 font-mono uppercase">{validationResults.language}</span>
+                                                                            {/if}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="bg-white divide-y divide-slate-100">
+                                                                        {#if validationResults.error}
+                                                                            <div class="p-4">
+                                                                                <pre class="text-rose-400 text-xs font-mono whitespace-pre-wrap break-words">{validationResults.error}</pre>
+                                                                            </div>
+                                                                        {:else if validationResults.test_results && validationResults.test_results.length > 0}
+                                                                            {#each validationResults.test_results as result, i}
+                                                                                <div class="px-4 py-3 flex items-start gap-3 hover:bg-slate-50/50 transition-colors">
+                                                                                    <div class="mt-0.5">
+                                                                                        {#if result.passed}
+                                                                                            <div class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                                                                                                <CheckCircle2 size={12} class="text-emerald-600" />
+                                                                                            </div>
+                                                                                        {:else}
+                                                                                            <div class="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center">
+                                                                                                <AlertCircle size={12} class="text-rose-500" />
+                                                                                            </div>
+                                                                                        {/if}
+                                                                                    </div>
+                                                                                    <div class="flex-1 min-w-0">
+                                                                                        <div class="flex items-center gap-2 mb-1">
+                                                                                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Case {result.index + 1}</span>
+                                                                                            {#if result.is_hidden}
+                                                                                                <span class="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Hidden</span>
+                                                                                            {/if}
+                                                                                            {#if result.time_ms}
+                                                                                                <span class="text-[10px] text-slate-400 font-mono">{result.time_ms}ms</span>
+                                                                                            {/if}
+                                                                                        </div>
+                                                                                        {#if !result.passed && result.error}
+                                                                                            <p class="text-xs font-mono text-rose-500 break-words">{result.error}</p>
+                                                                                        {/if}
+                                                                                    </div>
+                                                                                </div>
+                                                                            {/each}
+                                                                        {:else}
+                                                                            <div class="p-4 text-center text-xs text-slate-400 font-bold">No test results</div>
+                                                                        {/if}
+                                                                    </div>
+                                                                </div>
+                                                            {/if}
+                                                        </div>
+                                                    {/if}
                                                 </div>
                                             {:else}
                                                 <div
@@ -794,7 +1022,7 @@
                                         Solution Insight
                                     </h3>
                                     <div
-                                        class="p-8 bg-amber-50/30 rounded-[2rem] border border-amber-100/50 relative overflow-hidden"
+                                        class="p-6 bg-amber-50/30 rounded-2xl border border-amber-100/50 relative overflow-hidden"
                                     >
                                         <div
                                             class="absolute -right-4 -bottom-4 opacity-5 text-amber-900"
@@ -831,16 +1059,16 @@
                             </div>
 
                             <!-- Right: Metadata & Stats -->
-                            <div class="space-y-10">
+                            <div class="space-y-8">
                                 <!-- Tags -->
-                                <section class="space-y-5">
+                                <section class="space-y-4">
                                     <h3
                                         class="text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2"
                                     >
                                         Classification
                                     </h3>
                                     <div
-                                        class="p-6 bg-slate-100/50 rounded-[2rem] space-y-4"
+                                        class="p-5 bg-slate-100/50 rounded-2xl space-y-4"
                                     >
                                         <div class="flex flex-wrap gap-2.5">
                                             {#each isEditing ? editableData.tags || [] : question.tags || [] as tag}
@@ -922,17 +1150,17 @@
                                 </section>
 
                                 <!-- Audit Trail -->
-                                <section class="space-y-5">
+                                <section class="space-y-4">
                                     <h3
                                         class="text-xs font-black text-slate-400 uppercase tracking-[0.2em] px-2"
                                     >
                                         Intelligence Meta
                                     </h3>
                                     <div
-                                        class="bg-white rounded-[2rem] border border-slate-100 divide-y divide-slate-50 overflow-hidden shadow-sm"
+                                        class="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-50 overflow-hidden shadow-sm"
                                     >
                                         <div
-                                            class="p-6 flex items-center justify-between"
+                                            class="px-5 py-4 flex items-center justify-between"
                                         >
                                             <div
                                                 class="flex items-center gap-3"
@@ -957,7 +1185,7 @@
                                             </div>
                                         </div>
                                         <div
-                                            class="p-6 flex items-center justify-between"
+                                            class="px-5 py-4 flex items-center justify-between"
                                         >
                                             <div
                                                 class="flex items-center gap-3"
@@ -993,13 +1221,13 @@
 
             <!-- Footer Action -->
             <div
-                class="px-10 py-8 border-t border-slate-100 bg-white/80 backdrop-blur-md flex items-center justify-end gap-4 sticky bottom-0 z-30"
+                class="px-8 py-5 border-t border-slate-100 bg-white/80 backdrop-blur-md flex items-center justify-end gap-4 sticky bottom-0 z-30"
             >
                 <button
                     onclick={close}
-                    class="px-10 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-sm font-black shadow-xl shadow-slate-200 transition-all active:scale-95"
+                    class="px-8 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-sm font-black shadow-xl shadow-slate-200 transition-all active:scale-95"
                 >
-                    Close Portal
+                    Close
                 </button>
             </div>
         </div>

@@ -2,7 +2,7 @@
 	import { page } from "$app/stores";
 	import { applicationService } from "$lib/api/application.service";
 	import { intelligenceService } from "$lib/api/intelligence.service";
-	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, Check, X, Target } from "lucide-svelte";
+	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy } from "lucide-svelte";
 	import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
 	import PageLoader from "$lib/components/ui/PageLoader.svelte";
 	import ButtonLoader from "$lib/components/ui/ButtonLoader.svelte";
@@ -14,6 +14,8 @@
 	let loading = $state(true);
 	let isProcessing = $state(false);
 	let intelligenceData = $state(null);
+	let parsedAnalysis = $state(null);
+	let parsedGithub = $state(null);
 	let loadingIntelligence = $state(false);
 	let accessDenied = $state(false);
 
@@ -35,16 +37,13 @@
 			}
 			application = data;
 
-			// Load intelligence data — try quiz attempt ID (QuizID) first so the backend
-			// can resolve the quiz attempt & compute ATS score. Fall back to UserID.
-			const quizId = getVal(data, "QuizID", "quiz_id");
 			const userId = getVal(data, "UserID", "user_id", "UserId");
-			const idToFetch = (quizId && quizId !== "00000000-0000-0000-0000-000000000000") ? quizId : userId;
-			if (idToFetch) {
+			if (userId) {
 				loadingIntelligence = true;
 				try {
-					const intelligence = await intelligenceService.fetchGitHubIntelligence(idToFetch);
+					const intelligence = await intelligenceService.fetchGitHubIntelligence(userId);
 					intelligenceData = intelligence;
+					parseIntelligenceData(intelligence);
 				} catch (error) {
 					console.error("Failed to fetch GitHub intelligence:", error);
 				} finally {
@@ -59,6 +58,24 @@
 		}
 	}
 
+	function parseIntelligenceData(data) {
+		if (!data) return;
+
+		const aiSummary = data.ai_summary;
+		if (aiSummary?.summary) {
+			try {
+				const parsed = typeof aiSummary.summary === "string"
+					? JSON.parse(aiSummary.summary)
+					: aiSummary.summary;
+				parsedAnalysis = parsed?.analysis || null;
+				parsedGithub = parsed?.github || null;
+			} catch {
+				parsedAnalysis = null;
+				parsedGithub = null;
+			}
+		}
+	}
+
 	function isFinishedQuiz() {
 		return (application?.Status || application?.status || "").toLowerCase() === "quiz_completed";
 	}
@@ -70,25 +87,6 @@
 			if (val != null && val !== "") return val;
 		}
 		return null;
-	}
-
-	function formatSummary(summary) {
-		if (!summary) return "";
-		try {
-			const parsed = JSON.parse(summary);
-			if (parsed.response && typeof parsed.response === "string") {
-				return parsed.response;
-			}
-			if (parsed.analysis?.checks?.length) {
-				return parsed.analysis.checks.map(c => c.message).filter(Boolean).join(". ") + ".";
-			}
-			if (parsed.response?.checks?.length) {
-				return parsed.response.checks.map(c => c.message).filter(Boolean).join(". ") + ".";
-			}
-		} catch {
-			// not JSON, use as-is
-		}
-		return summary;
 	}
 
 	function formatDate(dateStr) {
@@ -123,6 +121,37 @@
 		return application?.ID || application?.id || applicationId;
 	}
 
+	function computeQuizStats() {
+		const answers = intelligenceData?.quiz_answers || [];
+		const total = answers.length;
+		const correct = answers.filter(a => a.IsCorrect === true).length;
+		const accuracy = total ? Math.round((correct / total) * 100) : 0;
+		const last = answers.length ? answers[answers.length - 1]?.LastSavedAt : null;
+		return { total, correct, accuracy, last };
+	}
+
+	function getStrengths() {
+		const s = intelligenceData?.ai_summary?.strengths;
+		if (!s) return [];
+		return s.split(";").map(x => x.trim()).filter(Boolean);
+	}
+
+	function getWeaknesses() {
+		const w = intelligenceData?.ai_summary?.weaknesses;
+		if (!w) return [];
+		return w.split(";").map(x => x.trim()).filter(Boolean);
+	}
+
+	function getLangPercentage(lang) {
+		if (typeof lang === "object" && lang.percentage) return lang.percentage;
+		return null;
+	}
+
+	function getLangName(lang) {
+		if (typeof lang === "string") return lang;
+		return lang?.language || lang?.name || String(lang);
+	}
+
 	async function acceptApplication() {
 		if (!application) return;
 		isProcessing = true;
@@ -133,7 +162,6 @@
 				Status: "accepted",
 				status: "accepted"
 			};
-
 			showToast("Application accepted", "success");
 			await loadApplication();
 		} catch (error) {
@@ -154,7 +182,6 @@
 				Status: "rejected",
 				status: "rejected"
 			};
-
 			showToast("Application rejected", "success");
 			await loadApplication();
 		} catch (error) {
@@ -167,6 +194,30 @@
 
 	function goBack() {
 		goto("/admin/applications");
+	}
+
+	const quizStats = $derived(computeQuizStats());
+	const atsScore = $derived(parsedAnalysis?.ats_score ?? null);
+	const scoreBreakdown = $derived(parsedAnalysis?.score_breakdown || null);
+	const checks = $derived(parsedAnalysis?.checks || []);
+	const suggestedSkills = $derived(parsedAnalysis?.suggested_fields?.skills || []);
+	const suggestedHeadline = $derived(parsedAnalysis?.suggested_fields?.headline || null);
+	const suggestedEducation = $derived(parsedAnalysis?.suggested_fields?.education || []);
+	const suggestedExperience = $derived(parsedAnalysis?.suggested_fields?.experience || []);
+	const ghIntelligence = $derived(intelligenceData?.github_intelligence || {});
+	const ghLanguages = $derived(parsedGithub?.languages || ghIntelligence.top_languages || []);
+
+	let openSections = $state({
+		atsScore: true,
+		strengths: true,
+		fieldChecks: false,
+		githubProfile: true,
+		suggested: false,
+		quizActivity: false,
+	});
+
+	function toggleSection(key) {
+		openSections[key] = !openSections[key];
 	}
 </script>
 
@@ -183,9 +234,7 @@
 					<div>
 						<h3 class="text-2xl font-semibold tracking-tight text-slate-900">{accessDenied ? "Quiz not finished yet" : "Application not found"}</h3>
 						<p class="mt-2 text-sm text-slate-500">
-							{accessDenied
-								? "Only quiz-completed applications are visible."
-								: "This application is unavailable."}
+							{accessDenied ? "Only quiz-completed applications are visible." : "This application is unavailable."}
 						</p>
 					</div>
 					<button onclick={goBack} class="btn btn-primary gap-2 shadow-sm">
@@ -195,6 +244,7 @@
 				</div>
 			</div>
 		{:else if isFinishedQuiz()}
+			<!-- Header bar -->
 			<div class="mb-5 flex items-center justify-between gap-3 rounded-3xl border border-white/70 bg-white/80 px-5 py-4 shadow-sm backdrop-blur">
 				<button onclick={goBack} class="btn btn-ghost btn-sm gap-2 text-slate-600 hover:text-slate-900">
 					<ChevronLeft size={18} />
@@ -206,7 +256,9 @@
 			</div>
 
 			<div class="grid gap-6 xl:grid-cols-12 xl:items-start">
+				<!-- Left panel -->
 				<div class="space-y-6 xl:col-span-8">
+					<!-- Applicant hero -->
 					<section class="min-w-0 overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
 						<div class="bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 px-6 py-8 text-white sm:px-8">
 							<div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -318,9 +370,165 @@
 							</div>
 						</div>
 					</section>
+
+					<!-- ATS Score card -->
+					{#if loadingIntelligence}
+						<div class="rounded-3xl border border-white/70 bg-white/90 p-8 text-center shadow-sm backdrop-blur">
+							<div class="flex items-center justify-center gap-2 text-sm text-slate-500">
+								<Loader2 size={18} class="animate-spin" />
+								Analyzing resume intelligence...
+							</div>
+						</div>
+					{:else if intelligenceData}
+						{#if atsScore != null}
+							<section class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
+								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8 text-left" onclick={() => toggleSection('atsScore')}>
+									<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
+										<Target size={14} />
+										ATS Score
+										<span class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-slate-600">weighted</span>
+										<ChevronDown size={16} class="transition-transform duration-200 {openSections.atsScore ? 'rotate-180' : ''}" />
+									</div>
+								</button>
+								{#if openSections.atsScore}
+									<div class="p-6 sm:p-8">
+										<div class="flex items-center gap-6">
+											<span class="text-5xl font-bold tracking-tight text-slate-900">{atsScore}</span>
+											<span class="text-xl font-medium text-slate-400">/ 100</span>
+										</div>
+										{#if scoreBreakdown}
+											<div class="mt-4 flex flex-wrap gap-3">
+												{#if scoreBreakdown.clarity != null}
+													<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+														<ShieldCheck size={13} />
+														Clarity: {scoreBreakdown.clarity}
+													</span>
+												{/if}
+												{#if scoreBreakdown.keywords != null}
+													<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+														<BarChart3 size={13} />
+														Keywords: {scoreBreakdown.keywords}
+													</span>
+												{/if}
+												{#if scoreBreakdown.structure != null}
+													<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+														<BookOpen size={13} />
+														Structure: {scoreBreakdown.structure}
+													</span>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/if}
+							</section>
+						{/if}
+
+						<!-- Strengths & Weaknesses -->
+						{#if getStrengths().length > 0 || getWeaknesses().length > 0}
+							<section class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
+								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8 text-left" onclick={() => toggleSection('strengths')}>
+									<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
+										<Lightbulb size={14} />
+										Strengths & Weaknesses
+										<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.strengths ? 'rotate-180' : ''}" />
+									</div>
+								</button>
+								{#if openSections.strengths}
+									<div class="p-6 sm:p-8">
+										{#if getStrengths().length > 0}
+											<div class="mb-5">
+												<h3 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+													<Check size={15} />
+													Strengths
+												</h3>
+												<ul class="space-y-2">
+													{#each getStrengths() as s}
+														<li class="flex items-start gap-2 text-sm text-slate-700">
+															<span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center">
+																<Check size={12} class="text-emerald-600" />
+															</span>
+															{s}
+														</li>
+													{/each}
+												</ul>
+											</div>
+										{/if}
+										{#if getWeaknesses().length > 0}
+											<div>
+												<h3 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-red-600">
+													<AlertTriangle size={15} />
+													Weaknesses
+												</h3>
+												<ul class="space-y-2">
+													{#each getWeaknesses() as w}
+														<li class="flex items-start gap-2 text-sm text-slate-700">
+															<span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-red-100 flex items-center justify-center">
+																<X size={12} class="text-red-600" />
+															</span>
+															{w}
+														</li>
+													{/each}
+												</ul>
+											</div>
+										{/if}
+									</div>
+								{/if}
+							</section>
+						{/if}
+
+						<!-- Field checks -->
+						{#if checks.length > 0}
+							<section class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
+								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8 text-left" onclick={() => toggleSection('fieldChecks')}>
+									<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
+										<ShieldCheck size={14} />
+										Field Checks
+										<span class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-slate-600">{checks.length}</span>
+										<ChevronDown size={16} class="transition-transform duration-200 {openSections.fieldChecks ? 'rotate-180' : ''}" />
+									</div>
+								</button>
+								{#if openSections.fieldChecks}
+									<div class="divide-y divide-slate-100 p-2">
+										{#each checks as check}
+											<div class="flex items-start gap-3 px-4 py-3">
+												{#if check.status === "pass"}
+													<span class="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center">
+														<Check size={14} class="text-emerald-600" />
+													</span>
+												{:else if check.status === "warn"}
+													<span class="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-amber-100 flex items-center justify-center">
+														<AlertTriangle size={14} class="text-amber-600" />
+													</span>
+												{:else}
+													<span class="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-red-100 flex items-center justify-center">
+														<X size={14} class="text-red-600" />
+													</span>
+												{/if}
+												<div class="min-w-0 flex-1">
+													<div class="flex items-center gap-2 flex-wrap">
+														<span class="text-sm font-semibold text-slate-800">{check.field || check.label || "—"}</span>
+														<span class="badge badge-sm border-none {check.status === 'pass' ? 'bg-emerald-100 text-emerald-700' : check.status === 'warn' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">
+															{check.status}
+														</span>
+													</div>
+													<p class="mt-0.5 text-xs text-slate-500">{check.message || check.detail || ""}</p>
+												</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</section>
+						{/if}
+					{:else}
+						<div class="rounded-3xl border border-dashed border-slate-200 bg-white/90 p-8 text-center text-sm text-slate-500 shadow-sm backdrop-blur">
+							No intelligence data available.
+						</div>
+					{/if}
 				</div>
 
+				<!-- Right sidebar -->
 				<aside class="min-w-0 space-y-6 xl:col-span-4 xl:sticky xl:top-6 xl:self-start">
+					<!-- Actions -->
 					<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
 						<div class="border-b border-slate-200 bg-slate-50 px-6 py-4">
 							<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</h2>
@@ -348,175 +556,137 @@
 						</div>
 					</div>
 
-					<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-						<div class="border-b border-slate-200 bg-slate-50 px-6 py-4">
-							<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Intelligence</h2>
-						</div>
-						<div class="p-6">
-							{#if loadingIntelligence}
-								<div class="flex items-center gap-2 text-sm text-slate-500">
-									<Loader2 size={18} class="animate-spin" />
-									Fetching GitHub intelligence...
+					{#if !loadingIntelligence && intelligenceData}
+						<!-- GitHub profile -->
+						<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
+							<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 text-left" onclick={() => toggleSection('githubProfile')}>
+								<div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">
+									<GitBranch size={14} />
+									GitHub Profile
+									<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.githubProfile ? 'rotate-180' : ''}" />
 								</div>
-							{:else if intelligenceData}
-								<div class="space-y-4">
-									<!-- ATS Score (compact) -->
-									{#if intelligenceData.ats_score}
-										<div class="rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 p-4 ring-1 ring-slate-200">
-											<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-												<Target size={14} />
-												ATS Score
-											</div>
-											<div class="mt-3 flex items-center gap-4">
-												<div class="flex-1 text-center">
-													<span class="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-4xl font-bold text-transparent">
-														{intelligenceData.ats_score.score ?? 0}
-													</span>
-													<span class="text-lg font-bold text-slate-400">/100</span>
-												</div>
-												{#if intelligenceData.quiz_attempt?.passed !== undefined}
-													<div class="flex items-center gap-1.5 text-sm font-semibold">
-														{#if intelligenceData.quiz_attempt.passed}
-															<span class="flex items-center gap-1 text-emerald-600"><Check size={16} />Passed</span>
-														{:else}
-															<span class="flex items-center gap-1 text-red-500"><X size={16} />Failed</span>
+							</button>
+							{#if openSections.githubProfile}
+								<div class="p-6 space-y-4">
+									<div class="flex items-center justify-between text-sm">
+										<span class="text-slate-500">User</span>
+										<span class="font-semibold text-slate-900">{parsedGithub?.username || ghIntelligence.github_username || getVal(application, "GithubUsername", "github_username", "GithubUsername_2") || "—"}</span>
+									</div>
+									<div class="flex items-center justify-between text-sm">
+										<span class="text-slate-500">Repos</span>
+										<span class="font-semibold text-slate-900">{parsedGithub?.repo_count ?? ghIntelligence.public_repos ?? "—"}</span>
+									</div>
+
+									<div class="rounded-2xl bg-slate-50 p-4 grid grid-cols-2 gap-3 ring-1 ring-slate-100">
+										<div>
+											<p class="text-[11px] uppercase tracking-wider text-slate-400">Followers</p>
+											<p class="mt-1 text-lg font-bold text-slate-900">{ghIntelligence.followers ?? "—"}</p>
+										</div>
+										<div>
+											<p class="text-[11px] uppercase tracking-wider text-slate-400">Following</p>
+											<p class="mt-1 text-lg font-bold text-slate-900">{ghIntelligence.following ?? "—"}</p>
+										</div>
+										<div>
+											<p class="text-[11px] uppercase tracking-wider text-slate-400">Activity</p>
+											<p class="mt-1 text-sm font-bold capitalize text-slate-900">{ghIntelligence.activity_level || "—"}</p>
+										</div>
+										<div>
+											<p class="text-[11px] uppercase tracking-wider text-slate-400">Focus</p>
+											<p class="mt-1 text-sm font-bold text-slate-900">{ghIntelligence.focus || "—"}</p>
+										</div>
+									</div>
+
+									{#if ghLanguages.length > 0}
+										<div>
+											<p class="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Top Languages</p>
+											<div class="flex flex-wrap gap-2">
+												{#each ghLanguages as lang}
+													<span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
+														{getLangName(lang)}
+														{#if getLangPercentage(lang)}
+															<span class="text-slate-400">{getLangPercentage(lang)}%</span>
 														{/if}
-													</div>
-												{/if}
+													</span>
+												{/each}
 											</div>
-											{#if intelligenceData.ats_score.checks?.length}
-												<div class="mt-3 space-y-1.5 border-t border-white/60 pt-3">
-													{#each intelligenceData.ats_score.checks as check}
-														<div class="flex items-center gap-2 text-xs">
-															{#if check.status === "pass"}
-																<Check size={12} class="shrink-0 text-emerald-500" />
-															{:else if check.status === "warn"}
-																<Loader2 size={12} class="shrink-0 text-amber-500" />
-															{:else}
-																<X size={12} class="shrink-0 text-red-500" />
-															{/if}
-															<span class="text-slate-600 truncate">{check.label}</span>
-														</div>
-													{/each}
-												</div>
-											{/if}
 										</div>
 									{/if}
+								</div>
+							{/if}
+						</div>
 
-									
-									<div class="rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 p-4 ring-1 ring-slate-200">
-										<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-											<GitBranch size={14} />
-											GitHub Profile
-										</div>
-										<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-											<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-												<p class="text-xs text-slate-500">Activity</p>
-												<p class="mt-1 break-words text-sm font-semibold capitalize leading-snug text-slate-900">{intelligenceData.github_intelligence?.activity_level || "—"}</p>
+						<!-- Suggested headline & skills -->
+						{#if suggestedHeadline || suggestedSkills.length > 0 || suggestedEducation.length > 0}
+							<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
+								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 text-left" onclick={() => toggleSection('suggested')}>
+									<div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">
+										<BrainCircuit size={14} />
+										Suggested Headline & Skills
+										<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.suggested ? 'rotate-180' : ''}" />
+									</div>
+								</button>
+								{#if openSections.suggested}
+									<div class="p-6 space-y-5">
+										{#if suggestedHeadline}
+											<div class="rounded-2xl bg-blue-50 p-4 text-sm font-medium text-blue-900 ring-1 ring-blue-100">
+												{suggestedHeadline}
 											</div>
-											<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-												<p class="text-xs text-slate-500">Focus</p>
-												<p class="mt-1 break-words text-sm font-semibold leading-snug text-slate-900">{intelligenceData.github_intelligence?.focus || "—"}</p>
-											</div>
-											<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-												<p class="text-xs text-slate-500">Repos</p>
-												<p class="mt-1 break-words text-sm font-semibold leading-snug text-slate-900">{intelligenceData.github_intelligence?.public_repos ?? "—"}</p>
-											</div>
-											<div class="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-												<p class="text-xs text-slate-500">Followers</p>
-												<p class="mt-1 break-words text-sm font-semibold leading-snug text-slate-900">{intelligenceData.github_intelligence?.followers ?? "—"}</p>
-											</div>
-										</div>
-										{#if intelligenceData.github_intelligence?.top_languages?.length}
-											<div class="mt-4 border-t border-white/60 pt-4">
-												<p class="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Top Languages</p>
-												<div class="mt-2 flex flex-wrap gap-2">
-													{#each intelligenceData.github_intelligence.top_languages as lang}
-														<span class="badge badge-sm border-none bg-purple-100 text-purple-700">{lang}</span>
+										{/if}
+										{#if suggestedSkills.length > 0}
+											<div>
+												<p class="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Suggested Skills</p>
+												<div class="flex flex-wrap gap-2">
+													{#each suggestedSkills as skill}
+														<span class="inline-block rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">{skill}</span>
 													{/each}
 												</div>
 											</div>
 										{/if}
+										{#if suggestedEducation.length > 0}
+											<div>
+												<p class="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Education (Extracted)</p>
+												<ul class="space-y-1">
+													{#each suggestedEducation as edu}
+														<li class="flex items-start gap-2 text-sm text-slate-700">
+															<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400"></span>
+															{edu}
+														</li>
+													{/each}
+												</ul>
+											</div>
+										{/if}
 									</div>
+								{/if}
+							</div>
+						{/if}
 
-									{#if intelligenceData.cv_signals}
-										<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-											<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-												<Code2 size={14} />
-												CV Signals
-											</div>
-											<div class="mt-3 space-y-3">
-												<div class="rounded-xl bg-white p-3 ring-1 ring-slate-100">
-													<p class="text-xs text-slate-500">Experience Level</p>
-													<p class="mt-1 break-words text-sm font-semibold leading-snug text-slate-900">{intelligenceData.cv_signals.experience_level || "—"}</p>
-												</div>
-												<div class="rounded-xl bg-white p-3 ring-1 ring-slate-100">
-													<p class="text-xs text-slate-500">Projects Listed</p>
-													<p class="mt-1 break-words text-sm font-semibold leading-snug text-slate-900">{intelligenceData.cv_signals.projects_listed ?? "—"}</p>
-												</div>
-												<div class="rounded-xl bg-white p-3 ring-1 ring-slate-100">
-													<p class="text-xs text-slate-500">Credibility</p>
-													<p class="mt-1 break-words text-sm font-semibold capitalize leading-snug text-slate-900">{intelligenceData.cv_signals.credibility || "—"}</p>
-												</div>
-												<div class="rounded-xl bg-white p-3 ring-1 ring-slate-100">
-													<p class="text-xs text-slate-500">GitHub Alignment</p>
-													<p class="mt-1 break-words text-sm font-semibold capitalize leading-snug text-slate-900">{intelligenceData.cv_signals.alignment_with_github?.replace(/_/g, " ") || "—"}</p>
-												</div>
-											</div>
-											{#if intelligenceData.cv_signals.claimed_skills?.length}
-												<div class="mt-4 border-t border-slate-200 pt-4">
-													<p class="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Claimed Skills</p>
-													<div class="mt-2 flex flex-wrap gap-2">
-														{#each intelligenceData.cv_signals.claimed_skills as skill}
-															<span class="badge badge-sm border-none bg-emerald-100 text-emerald-700">{skill}</span>
-														{/each}
-													</div>
-												</div>
-											{/if}
-										</div>
-									{/if}
-
+						<!-- Quiz activity -->
+						<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
+							<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 text-left" onclick={() => toggleSection('quizActivity')}>
+								<div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">
+									<Trophy size={14} />
+									Quiz Activity
+									<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.quizActivity ? 'rotate-180' : ''}" />
 								</div>
-							{:else}
-								<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">
-									No GitHub intelligence data available.
+							</button>
+							{#if openSections.quizActivity}
+								<div class="p-6">
+									<div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+										<span><span class="font-semibold text-slate-900">Attempts:</span> <span class="text-slate-600">{quizStats.total}</span></span>
+										<span><span class="font-semibold text-slate-900">Correct:</span> <span class="text-slate-600">{quizStats.correct}</span></span>
+										<span><span class="font-semibold text-slate-900">Accuracy:</span> <span class="text-slate-600">{quizStats.accuracy}%</span></span>
+									</div>
+									{#if quizStats.last}
+										<p class="mt-2 text-xs text-slate-400">Last saved: {new Date(quizStats.last).toLocaleString()}</p>
+									{/if}
 								</div>
 							{/if}
 						</div>
-					</div>
+
+						<p class="text-right text-xs text-slate-400">data from dat.json · ATS v1</p>
+					{/if}
 				</aside>
 			</div>
-
-			{#if intelligenceData?.ai_summary}
-				<section class="mt-6 overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-					<div class="border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8">
-						<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-							<BrainCircuit size={14} />
-							AI Summary
-						</div>
-					</div>
-					<div class="grid gap-4 p-6 sm:p-8 xl:grid-cols-2">
-						{#if intelligenceData.ai_summary.summary}
-							<div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200 xl:col-span-2">
-								<p class="text-xs font-medium text-slate-500">Summary</p>
-								<p class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatSummary(intelligenceData.ai_summary.summary)}</p>
-							</div>
-						{/if}
-						{#if intelligenceData.ai_summary.strengths}
-							<div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-								<p class="text-xs font-medium text-slate-500">Strengths</p>
-								<p class="mt-2 break-words text-sm leading-6 text-slate-700">{intelligenceData.ai_summary.strengths}</p>
-							</div>
-						{/if}
-						{#if intelligenceData.ai_summary.weaknesses}
-							<div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-								<p class="text-xs font-medium text-slate-500">Weaknesses</p>
-								<p class="mt-2 break-words text-sm leading-6 text-slate-700">{intelligenceData.ai_summary.weaknesses}</p>
-							</div>
-						{/if}
-					</div>
-				</section>
-			{/if}
 		{/if}
 	</div>
 </div>

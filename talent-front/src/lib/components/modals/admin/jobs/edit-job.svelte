@@ -18,6 +18,7 @@
         responsibilities: "",
         benefits: "",
         job_type: "full-time",
+        category: "full_stack_developer",
         experience_level: "entry",
         location: "",
         remote_possible: false,
@@ -40,6 +41,7 @@
             responsibilities: job.responsibilities || "",
             benefits: job.benefits || "",
             job_type: job.job_type || "full-time",
+            category: job.category || "full_stack_developer",
             experience_level: job.experience_level || "entry",
             location: job.location || "",
             remote_possible: !!job.remote_possible,
@@ -151,6 +153,24 @@
                                     class="input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
                                     bind:value={jobData.location}
                                 />
+                            </div>
+                            <div class="form-control flex flex-col gap-2">
+                                <label
+                                    class="label text-sm font-semibold text-gray-600 pb-1"
+                                    for="category">Category</label
+                                >
+                                <select
+                                    id="category"
+                                    class="select w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
+                                    bind:value={jobData.category}
+                                >
+                                    <option value="full_stack_developer">Full Stack Developer</option>
+                                    <option value="web_developer">Web Developer</option>
+                                    <option value="frontend_developer">Frontend Developer</option>
+                                    <option value="backend_developer">Backend Developer</option>
+                                    <option value="system_architect">System Architect</option>
+                                    <option value="mobile_developer">Mobile Developer</option>
+                                </select>
                             </div>
                             <div class="form-control flex flex-col gap-2">
                                 <label

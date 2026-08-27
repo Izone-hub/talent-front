@@ -161,6 +161,11 @@
                                 <Clock size={16} />
                                 {job.job_type}
                             </span>
+                            {#if job.category}
+                            <span class="badge badge-outline badge-sm">
+                                {job.category.replace(/_/g, ' ')}
+                            </span>
+                            {/if}
                         </div>
                     </div>
                 </div>

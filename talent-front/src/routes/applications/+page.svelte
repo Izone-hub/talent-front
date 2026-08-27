@@ -17,6 +17,8 @@
         Loader2,
         AlertTriangle,
         X,
+        PartyPopper,
+        Sparkles,
     } from "@lucide/svelte";
 
     let applications = $state([]);
@@ -150,6 +152,40 @@
             </p>
         </div>
 
+        {#if !isLoading && applications.length > 0 && applications.some(a => a.Status === 'accepted')}
+            {@const acceptedApps = applications.filter(a => a.Status === 'accepted')}
+            <div class="mb-6 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-green-50 p-6 shadow-lg shadow-emerald-100/50 sm:p-8">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100">
+                        <PartyPopper class="h-7 w-7 text-emerald-600" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-xl font-bold text-emerald-800">
+                            🎉 Congratulations!
+                        </h2>
+                        <p class="mt-1 text-sm text-emerald-700">
+                            {#if acceptedApps.length === 1}
+                                Your application for <strong>{acceptedApps[0].JobTitle}</strong> at <strong>{acceptedApps[0].JobCompany}</strong> has been accepted!
+                            {:else}
+                                You have {acceptedApps.length} accepted application{acceptedApps.length > 1 ? 's' : ''}!
+                            {/if}
+                        </p>
+                        <p class="mt-1 text-sm text-emerald-600/80">
+                            Check the details below or view your next steps.
+                        </p>
+                        <a
+                            href="/applications/accepted"
+                            class="btn mt-3 gap-2 border-emerald-600 bg-emerald-600 text-sm text-white hover:bg-emerald-700"
+                        >
+                            <Sparkles class="h-4 w-4" />
+                            View Next Steps
+                            <ArrowRight class="h-4 w-4" />
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {/if}
+
         {#if isLoading}
             <div class="space-y-4" role="status" aria-busy="true" aria-label="Loading your applications">
                 {#each [1, 2, 3] as i}
@@ -189,7 +225,7 @@
         {:else}
             <div class="space-y-4">
                 {#each applications as app (app.ID)}
-                    <div class="rounded-xl border border-slate-200 bg-white p-6 transition-all hover:shadow-md">
+                    <div class="rounded-xl border p-6 transition-all hover:shadow-md {app.Status === 'accepted' ? 'border-emerald-300 bg-gradient-to-r from-emerald-50/80 via-white to-green-50/60 shadow-md shadow-emerald-100/40' : 'border-slate-200 bg-white'}">
                         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div class="min-w-0 flex-1 cursor-pointer" onclick={() => openJobDetail(app)}>
                                 <div class="flex items-center gap-2">
@@ -250,10 +286,19 @@
                                         In Review
                                     </span>
                                 {:else if app.Status === "accepted"}
-                                    <span class="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-                                        <CheckCircle2 class="h-4 w-4" />
-                                        Accepted
-                                    </span>
+                                    <div class="flex flex-col items-end gap-2">
+                                        <span class="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
+                                            <CheckCircle2 class="h-4 w-4" />
+                                            Accepted!
+                                        </span>
+                                        <a
+                                            href="/applications/accepted"
+                                            class="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-800"
+                                        >
+                                            View next steps
+                                            <ArrowRight class="h-3 w-3" />
+                                        </a>
+                                    </div>
                                 {:else if app.Status === "rejected"}
                                     <span class="flex items-center gap-1.5 text-sm font-medium text-red-600">
                                         <XCircle class="h-4 w-4" />
