@@ -213,6 +213,13 @@
 						>
 						{job.job_type || "Not specified"}
 					</div>
+					{#if job.category}
+					<div
+						class="badge gap-1.5 badge-outline border-purple-100/70 bg-purple-50/40 px-3 py-3 text-sm font-medium text-purple-700"
+					>
+						{job.category.replace(/_/g, ' ')}
+					</div>
+					{/if}
 					<div
 						class="badge gap-1.5 badge-outline border-emerald-100/70 bg-emerald-50/40 px-3 py-3 text-sm font-medium text-emerald-700"
 					>

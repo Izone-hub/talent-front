@@ -1,43 +1,308 @@
 <script>
-    import { XCircle, Globe, MapPin, Building2, Image } from "lucide-svelte";
+    import {
+        XCircle,
+        Sparkles,
+        ArrowRight,
+        ArrowLeft,
+        Check,
+        Heart,
+        PiggyBank,
+        Home,
+        Clock,
+        Umbrella,
+        TrendingUp,
+        GraduationCap,
+        Dumbbell,
+        Calendar,
+        Zap,
+    } from "lucide-svelte";
     import { jobService } from "$lib/api/job.service";
+    import { jobDescriptionService } from "$lib/api/jobDescription.service";
+    import { showToast } from "$lib/stores/toast";
+    import { companySettings } from "$lib/stores/companySettings";
 
-    export let isOpen = false;
-    export let onclose = () => {};
-    export let onsubmit = (data) => {};
-    export let jobData = {
-        title: "",
-        company: "",
-        company_logo: "",
-        company_website: "",
-        company_location: "",
-        description: "",
-        requirements: "",
-        responsibilities: "",
-        benefits: "",
-        job_type: "",
-        experience_level: "",
-        location: "",
-        remote_possible: false,
-        salary_min: null,
-        salary_max: null,
-        salary_currency: "",
-        expires_at: "",
-    };
+    let {
+        isOpen = false,
+        onclose = () => {},
+        onsubmit = (data) => {},
+        jobData = {
+            title: "",
+            description: "",
+            requirements: "",
+            responsibilities: "",
+            benefits: "",
+            job_type: "",
+            category: "",
+            experience_level: "",
+            location: "",
+            remote_possible: false,
+            salary_min: null,
+            salary_max: null,
+            salary_currency: "",
+            expires_at: "",
+        },
+    } = $props();
+
+    let currentStep = $state(1);
+    const totalSteps = 4;
+
+    let showAiPrompt = $state(false);
+    let aiPrompt = $state("");
+    let aiGenerating = $state(false);
+
+    let requirementTags = $state([]);
+    let newTagInput = $state("");
+    let selectedBenefits = $state([]);
+
+    const benefitOptions = [
+        { id: "health", label: "Health Insurance", icon: Heart },
+        { id: "401k", label: "401(k) Matching", icon: PiggyBank },
+        { id: "remote", label: "Remote Work", icon: Home },
+        { id: "flexible", label: "Flexible Hours", icon: Clock },
+        { id: "pto", label: "Paid Time Off", icon: Umbrella },
+        { id: "stock", label: "Stock Options", icon: TrendingUp },
+        { id: "learning", label: "Learning Budget", icon: GraduationCap },
+        { id: "gym", label: "Gym Membership", icon: Dumbbell },
+    ];
+
+    const suggestedTags = [
+        "React",
+        "TypeScript",
+        "Node.js",
+        "Python",
+        "AWS",
+        "Docker",
+        "PostgreSQL",
+        "GraphQL",
+        "Git",
+        "REST APIs",
+    ];
+
+    let stepErrors = $state({});
+    let enhancing = $state(false);
 
     function close() {
+        showAiPrompt = false;
+        aiPrompt = "";
+        currentStep = 1;
+        stepErrors = {};
         onclose();
+    }
+
+    async function generateWithAi() {
+        if (!aiPrompt.trim()) return;
+        aiGenerating = true;
+        try {
+            const data = await jobDescriptionService.generate(aiPrompt);
+            let parsed = data.job_description;
+            if (parsed && typeof parsed === "object" && parsed.raw) {
+                try {
+                    parsed = JSON.parse(parsed.raw);
+                } catch {}
+            }
+            if (parsed && typeof parsed === "object") {
+                if (parsed.title) jobData.title = parsed.title;
+                if (parsed.description) jobData.description = parsed.description;
+                if (parsed.requirements) {
+                    jobData.requirements = parsed.requirements;
+                    requirementTags = parsed.requirements
+                        .split("\n")
+                        .map((r) => r.trim())
+                        .filter(Boolean);
+                }
+                if (parsed.responsibilities)
+                    jobData.responsibilities = parsed.responsibilities;
+                if (parsed.benefits) {
+                    jobData.benefits = parsed.benefits;
+                    selectedBenefits = parsed.benefits
+                        .split(",")
+                        .map((b) => b.trim())
+                        .filter(Boolean);
+                }
+                if (parsed.job_type) jobData.job_type = parsed.job_type;
+                if (parsed.experience_level)
+                    jobData.experience_level = parsed.experience_level;
+                if (parsed.location) jobData.location = parsed.location;
+                if (typeof parsed.remote_possible === "boolean")
+                    jobData.remote_possible = parsed.remote_possible;
+                if (parsed.salary_min) jobData.salary_min = parsed.salary_min;
+                if (parsed.salary_max) jobData.salary_max = parsed.salary_max;
+                if (parsed.salary_currency)
+                    jobData.salary_currency = parsed.salary_currency;
+            }
+            showAiPrompt = false;
+            aiPrompt = "";
+            showToast("Job description generated successfully", "success");
+        } catch (error) {
+            showToast(error.message || "Failed to generate", "error");
+        } finally {
+            aiGenerating = false;
+        }
+    }
+
+    function handleAiKeydown(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            generateWithAi();
+        }
+    }
+
+    async function enhanceWithAi() {
+        enhancing = true;
+        try {
+            const payload = {
+                title: jobData.title,
+                description: jobData.description,
+                requirements: requirementTags.join(", "),
+                responsibilities: jobData.responsibilities || "",
+                benefits: selectedBenefits.join(", "),
+                job_type: jobData.job_type,
+                category: jobData.category,
+                experience_level: jobData.experience_level,
+                salary_min: jobData.salary_min,
+                salary_max: jobData.salary_max,
+                salary_currency: jobData.salary_currency,
+                remote_possible: jobData.remote_possible,
+            };
+
+            const data = await jobDescriptionService.enhanceJobPost(payload);
+            const parsed = data.response || data.job_description;
+            let raw = parsed;
+            if (raw && typeof raw === "object" && raw.raw) {
+                raw = raw.raw;
+            }
+            if (typeof raw === "string") {
+                raw = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+                try { raw = JSON.parse(raw); } catch {}
+            }
+            if (raw && typeof raw === "object") {
+                const title = raw.title || raw.job_title;
+                if (title) jobData.title = title;
+                if (raw.description) jobData.description = raw.description;
+                if (raw.requirements) {
+                    const reqs = Array.isArray(raw.requirements) ? raw.requirements : raw.requirements.split("\n");
+                    const cleaned = reqs.map((r) => r.trim().replace(/^[-•*]\s*/, "")).filter(Boolean);
+                    jobData.requirements = cleaned.join("\n");
+                    requirementTags = cleaned;
+                }
+                if (raw.responsibilities) {
+                    const resp = Array.isArray(raw.responsibilities) ? raw.responsibilities : raw.responsibilities.split("\n");
+                    jobData.responsibilities = resp.map((r) => r.trim()).filter(Boolean).join("\n");
+                }
+                if (raw.benefits) {
+                    const bens = Array.isArray(raw.benefits) ? raw.benefits : raw.benefits.split(",");
+                    const cleaned = bens.map((b) => b.trim()).filter(Boolean);
+                    jobData.benefits = cleaned.join(", ");
+                    selectedBenefits = cleaned;
+                }
+                if (raw.job_type) jobData.job_type = raw.job_type;
+                if (raw.experience_level) jobData.experience_level = raw.experience_level;
+                if (typeof raw.remote_possible === "boolean") jobData.remote_possible = raw.remote_possible;
+                if (raw.salary_min) jobData.salary_min = raw.salary_min;
+                if (raw.salary_max) jobData.salary_max = raw.salary_max;
+                if (raw.salary_currency) jobData.salary_currency = raw.salary_currency;
+                showToast("Job posting enhanced with AI", "success");
+            } else {
+                showToast("AI returned unexpected format", "error");
+            }
+        } catch (error) {
+            showToast(error.message || "Failed to enhance", "error");
+        } finally {
+            enhancing = false;
+        }
+    }
+
+    function addTag(text) {
+        const trimmed = text.trim();
+        if (trimmed && !requirementTags.includes(trimmed)) {
+            requirementTags = [...requirementTags, trimmed];
+            syncRequirements();
+        }
+    }
+
+    function removeTag(text) {
+        requirementTags = requirementTags.filter((t) => t !== text);
+        syncRequirements();
+    }
+
+    function syncRequirements() {
+        jobData.requirements = requirementTags.join("\n");
+    }
+
+    function handleTagKeydown(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (newTagInput.trim()) {
+                addTag(newTagInput);
+                newTagInput = "";
+            }
+        }
+    }
+
+    function toggleBenefit(benefitId) {
+        const bLabel = benefitOptions.find((b) => b.id === benefitId)?.label;
+        if (selectedBenefits.includes(bLabel)) {
+            selectedBenefits = selectedBenefits.filter((b) => b !== bLabel);
+        } else {
+            selectedBenefits = [...selectedBenefits, bLabel];
+        }
+        jobData.benefits = selectedBenefits.join(", ");
+    }
+
+    function validateStep(step) {
+        const errors = {};
+        if (step === 1) {
+            if (!jobData.title.trim()) errors.title = "Job title is required";
+            if (!jobData.description.trim())
+                errors.description = "Job description is required";
+        }
+        if (step === 2) {
+            if (requirementTags.length === 0)
+                errors.requirements = "Add at least one requirement";
+        }
+        if (step === 3) {
+            if (
+                jobData.salary_min &&
+                jobData.salary_max &&
+                Number(jobData.salary_min) > Number(jobData.salary_max)
+            ) {
+                errors.salary = "Maximum salary must be greater than minimum";
+            }
+        }
+        stepErrors = errors;
+        return Object.keys(errors).length === 0;
+    }
+
+    function nextStep() {
+        if (validateStep(currentStep) && currentStep < totalSteps) {
+            currentStep++;
+            stepErrors = {};
+        }
+    }
+
+    function prevStep() {
+        if (currentStep > 1) {
+            currentStep--;
+            stepErrors = {};
+        }
     }
 
     function submit(e) {
         e.preventDefault();
+        if (!validateStep(currentStep)) return;
+
+        let settings = {};
+        const unsub = companySettings.subscribe((v) => (settings = v));
+        unsub();
+
         const payload = { ...jobData };
-        if (!payload.company_logo) payload.company_logo = null;
-        if (!payload.company_website) payload.company_website = null;
-        if (!payload.company_location) payload.company_location = null;
+        payload.company = settings.company_name || "";
+        payload.company_logo = settings.company_logo || null;
+        payload.company_website = settings.company_website || null;
+        payload.company_location = settings.company_location || null;
+        payload.location = settings.company_location || null;
         if (!payload.responsibilities) payload.responsibilities = null;
         if (!payload.benefits) payload.benefits = null;
-        if (!payload.location) payload.location = null;
 
         if (!payload.expires_at) {
             payload.expires_at = null;
@@ -59,380 +324,554 @@
 
         onsubmit(payload);
     }
+
+    function goToStep(step) {
+        if (step <= currentStep || step === currentStep + 1) {
+            if (step < currentStep) {
+                currentStep = step;
+                stepErrors = {};
+            } else if (validateStep(currentStep)) {
+                currentStep = step;
+                stepErrors = {};
+            }
+        }
+    }
+
+    const stepLabels = ["Job Details", "Requirements", "Compensation", "Publishing"];
 </script>
 
-    {#if isOpen}
+{#if isOpen}
     <div
-        class="modal modal-open bg-black/40 backdrop-blur-sm transition-all duration-300 z-[100]"
+        class="modal modal-open bg-black/50 backdrop-blur-sm z-[100]"
         onclick={close}
     >
         <div
-            class="modal-box max-w-5xl rounded-lg p-0 overflow-hidden border-none scale-95"
+            class="modal-box max-w-3xl rounded-2xl p-0 overflow-hidden border border-base-200 shadow-2xl"
             onclick={(e) => e.stopPropagation()}
         >
             <!-- Modal Header -->
-            <div class="bg-purple-600 p-8 text-white relative">
-                <h3 class="text-2xl font-bold font-display">
-                    Post a New Opportunity
-                </h3>
-                <p class="text-purple-100 text-sm mt-1">
-                    Provide detailed information to find the perfect candidate.
-                </p>
-                <button
-                    class="absolute top-8 right-8 text-white/80 hover:text-white transition-transform hover:rotate-90"
-                    onclick={close}
-                    type="button"
-                    aria-label="Close modal"
-                >
-                    <XCircle size={24} />
-                </button>
+            <div class="bg-gradient-to-r from-purple-600 to-purple-700 px-8 py-6 text-white relative">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="inline-flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1 text-xs font-semibold mb-2">
+                            <Zap size={12} />
+                            Post a Job
+                        </div>
+                        <h3 class="text-xl font-bold">Find Your Next Great Hire</h3>
+                        <p class="text-purple-200 text-sm mt-0.5">
+                            Create a compelling job posting that attracts top talent
+                        </p>
+                    </div>
+                    <button
+                        class="text-white/70 hover:text-white transition-all hover:rotate-90 p-1"
+                        onclick={close}
+                        type="button"
+                        aria-label="Close modal"
+                    >
+                        <XCircle size={22} />
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step Progress -->
+            <div class="bg-white px-8 pt-6 pb-2">
+                <div class="flex items-center justify-between relative">
+                    <div class="absolute top-5 left-8 right-8 h-0.5 bg-base-200 z-0"></div>
+                    <div
+                        class="absolute top-5 left-8 h-0.5 bg-purple-500 z-0 transition-all duration-500"
+                        style="width: {((currentStep - 1) / (totalSteps - 1)) * 100}%"
+                    ></div>
+                    {#each stepLabels as label, i}
+                        {@const stepNum = i + 1}
+                        <button
+                            class="flex flex-col items-center gap-1.5 z-10 cursor-pointer group"
+                            onclick={() => goToStep(stepNum)}
+                            type="button"
+                        >
+                            <div
+                                class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 border-2
+                                {stepNum === currentStep
+                                    ? 'bg-purple-600 text-white border-purple-600 shadow-lg shadow-purple-200'
+                                    : stepNum < currentStep
+                                        ? 'bg-emerald-500 text-white border-emerald-500'
+                                        : 'bg-base-200 text-base-content/50 border-base-200 group-hover:border-purple-300'}"
+                            >
+                                {#if stepNum < currentStep}
+                                    <Check size={16} />
+                                {:else}
+                                    {stepNum}
+                                {/if}
+                            </div>
+                            <span
+                                class="text-xs font-semibold transition-colors
+                                {stepNum === currentStep
+                                    ? 'text-purple-700'
+                                    : stepNum < currentStep
+                                        ? 'text-emerald-600'
+                                        : 'text-base-content/40'}"
+                            >
+                                {label}
+                            </span>
+                        </button>
+                    {/each}
+                </div>
             </div>
 
             <!-- Modal Body -->
-            <div
-                class="p-8 max-h-[75vh] overflow-y-auto custom-scrollbar text-gray-700 bg-white"
-            >
-                <form onsubmit={submit} class="space-y-8">
-                    <!-- Section: Basic Job Info -->
-                    <div>
-                        <h4
-                            class="text-xs font-bold uppercase tracking-widest text-purple-600 mb-4 flex items-center gap-2"
-                        >
-                            <Building2 size={14} /> Basic Information
-                        </h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="job-title">Job Title *</label
-                                >
-                                <input
-                                    id="job-title"
-                                    type="text"
-                                    placeholder="e.g. Senior Frontend Engineer"
-                                    class="input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    bind:value={jobData.title}
-                                    required
-                                />
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="location"
-                                    >Job Location (Personal)</label
-                                >
-                                <input
-                                    id="location"
-                                    type="text"
-                                    placeholder="Addis Ababa, Ethiopia"
-                                    class="input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    bind:value={jobData.location}
-                                />
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="job-type">Job Type</label
-                                >
-                                <select
-                                    id="job-type"
-                                    class="select w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    bind:value={jobData.job_type}
-                                >
-                                    <option value="full-time">Full-time</option>
-                                    <option value="part-time">Part-time</option>
-                                    <option value="contract">Contract</option>
-                                    <option value="freelance">Freelance</option>
-                                    <option value="internship"
-                                        >Internship</option
-                                    >
-                                </select>
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="experience-level"
-                                    >Experience Level</label
-                                >
-                                <select
-                                    id="experience-level"
-                                    class="select w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    bind:value={jobData.experience_level}
-                                >
-                                    <option value="entry">Entry</option>
-                                    <option value="junior">Junior</option>
-                                    <option value="mid">Mid</option>
-                                    <option value="senior">Senior</option>
-                                    <option value="lead">Lead</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
+            <div class="px-8 py-6 max-h-[55vh] overflow-y-auto custom-scrollbar">
+                <form onsubmit={submit}>
+                    <!-- Step 1: Job Details -->
+                    {#if currentStep === 1}
+                        <div class="animate-fadeIn">
+                            <h4 class="text-lg font-bold text-base-content mb-1">Job Details</h4>
+                            <p class="text-sm text-base-content/50 mb-6">
+                                Tell candidates what this role is about
+                            </p>
 
-                    <!-- Section: Company Details -->
-                    <div>
-                        <h4
-                            class="text-xs font-bold uppercase tracking-widest text-purple-600 mb-4"
-                        >
-                            Company Details
-                        </h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="company-name">Company Name *</label
-                                >
-                                <input
-                                    id="company-name"
-                                    type="text"
-                                    placeholder="iZone Hub"
-                                    class="input w-full bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    bind:value={jobData.company}
-                                    required
-                                />
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="company-website">Company Website</label
-                                >
-                                <div class="relative">
-                                    <Globe
-                                        size={16}
-                                        class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                    />
+                            <div class="space-y-5">
+                                <!-- Job Title -->
+                                <div class="form-control flex flex-col gap-1.5">
+                                    <label class="text-sm font-semibold text-base-content" for="job-title">
+                                        Job Title <span class="text-red-500">*</span>
+                                    </label>
                                     <input
-                                        id="company-website"
-                                        type="url"
-                                        placeholder="https://example.com"
-                                        class="input w-full pl-10 bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                        bind:value={jobData.company_website}
-                                    />
-                                </div>
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="company-location"
-                                    >Company Headquarters</label
-                                >
-                                <div class="relative">
-                                    <MapPin
-                                        size={16}
-                                        class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                    />
-                                    <input
-                                        id="company-location"
+                                        id="job-title"
                                         type="text"
-                                        placeholder="Bole, Addis Ababa"
-                                        class="input w-full pl-10 bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                        bind:value={jobData.company_location}
+                                        placeholder="e.g. Senior Software Engineer"
+                                        class="input w-full bg-base-100 border-base-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 rounded-xl text-sm"
+                                        bind:value={jobData.title}
                                     />
+                                    {#if stepErrors.title}
+                                        <p class="text-xs text-red-500">{stepErrors.title}</p>
+                                    {/if}
+                                    <p class="text-xs text-base-content/40">
+                                        Be specific — use keywords candidates search for
+                                    </p>
                                 </div>
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="company-logo">Company Logo URL</label
-                                >
-                                <div class="relative">
-                                    <Image
-                                        size={16}
-                                        class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                    />
-                                    <input
-                                        id="company-logo"
-                                        type="text"
-                                        placeholder="https://logo.url/image.png"
-                                        class="input w-full pl-10 bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                        bind:value={jobData.company_logo}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Section: Job Content -->
-                    <div>
-                        <h4
-                            class="text-xs font-bold uppercase tracking-widest text-purple-600 mb-4"
-                        >
-                            Content & Requirements
-                        </h4>
-                        <div class="space-y-5">
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="description">Job Description *</label
-                                >
-                                <textarea
-                                    id="description"
-                                    class="textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 h-32 rounded-lg w-full"
-                                    placeholder="Provide a comprehensive job description..."
-                                    bind:value={jobData.description}
-                                    required
-                                ></textarea>
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="requirements">Requirements *</label
-                                >
-                                <textarea
-                                    id="requirements"
-                                    class="textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 h-24 rounded-lg w-full"
-                                    placeholder="List key skills and qualifications..."
-                                    bind:value={jobData.requirements}
-                                    required
-                                ></textarea>
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="responsibilities"
-                                    >Responsibilities</label
-                                >
-                                <textarea
-                                    id="responsibilities"
-                                    class="textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 h-24 rounded-lg w-full"
-                                    placeholder="What will they be doing daily?"
-                                    bind:value={jobData.responsibilities}
-                                ></textarea>
-                            </div>
-                            <div class="form-control flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="benefits">Benefits</label
-                                >
-                                <textarea
-                                    id="benefits"
-                                    class="textarea bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 h-24 rounded-lg w-full"
-                                    placeholder="Health insurance, PTO, Remote work, etc."
-                                    bind:value={jobData.benefits}
-                                ></textarea>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Section: Compensation & Closing -->
-                    <div class="grid grid-cols-1 gap-8 pt-4">
-                        <div
-                            class="bg-gray-50 p-6 rounded-2xl ring-1 ring-gray-100 h-fit"
-                        >
-                            <label
-                                class="text-xs font-bold uppercase tracking-widest text-gray-500 block mb-4"
-                                for="remote-possible"
-                                >Environment & Compensation</label
-                            >
-                            <div class="flex items-center gap-3 mb-6">
-                                <input
-                                    id="remote-possible"
-                                    type="checkbox"
-                                    class="checkbox checkbox-primary rounded-md"
-                                    bind:checked={jobData.remote_possible}
-                                />
-                                <label
-                                    class="text-sm font-semibold text-gray-700 cursor-pointer"
-                                    for="remote-possible">Remote Possible</label
-                                >
-                            </div>
-
-                            <div class="space-y-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="flex-1">
-                                        <label
-                                            class="text-[10px] font-bold text-gray-400 uppercase ml-1"
-                                            for="salary-min">Min Salary</label
+                                <!-- Job Description -->
+                                <div class="form-control flex flex-col gap-1.5">
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-sm font-semibold text-base-content" for="description">
+                                            Job Description <span class="text-red-500">*</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            class="btn btn-xs btn-outline border-purple-200 text-purple-600 hover:bg-purple-50 gap-1"
+                                            onclick={() => (showAiPrompt = !showAiPrompt)}
                                         >
-                                        <input
-                                            id="salary-min"
-                                            type="number"
-                                            placeholder="0"
-                                            class="input input-sm w-full bg-white border-none ring-1 ring-gray-200 rounded-lg text-sm"
-                                            bind:value={jobData.salary_min}
-                                        />
+                                            <Sparkles size={12} />
+                                            Generate with AI
+                                        </button>
                                     </div>
-                                    <span class="text-gray-300 mt-5">—</span>
-                                    <div class="flex-1">
-                                        <label
-                                            class="text-[10px] font-bold text-gray-400 uppercase ml-1"
-                                            for="salary-max">Max Salary</label
-                                        >
-                                        <input
-                                            id="salary-max"
-                                            type="number"
-                                            placeholder="0"
-                                            class="input input-sm w-full bg-white border-none ring-1 ring-gray-200 rounded-lg text-sm"
-                                            bind:value={jobData.salary_max}
-                                        />
+                                    {#if showAiPrompt}
+                                        <div class="flex gap-2 items-center p-3 bg-purple-50 rounded-xl border border-purple-100">
+                                            <input
+                                                type="text"
+                                                class="input input-sm flex-1 bg-white border-purple-200 focus:border-purple-500 text-sm"
+                                                placeholder="e.g. Senior Backend Developer with Go experience..."
+                                                bind:value={aiPrompt}
+                                                onkeydown={handleAiKeydown}
+                                                disabled={aiGenerating}
+                                            />
+                                            {#if aiGenerating}
+                                                <span class="loading loading-spinner loading-sm text-purple-600"></span>
+                                            {/if}
+                                        </div>
+                                        <p class="text-[11px] text-base-content/40 -mt-1">
+                                            Press <kbd class="kbd kbd-xs">Enter</kbd> to generate
+                                        </p>
+                                    {/if}
+                                    <textarea
+                                        id="description"
+                                        class="textarea bg-base-100 border-base-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-32 rounded-xl w-full text-sm"
+                                        placeholder="Describe the role, team, culture, and what makes this opportunity unique..."
+                                        bind:value={jobData.description}
+                                    ></textarea>
+                                    {#if stepErrors.description}
+                                        <p class="text-xs text-red-500">{stepErrors.description}</p>
+                                    {/if}
+                                    <p class="text-xs text-base-content/40 flex items-center gap-1">
+                                        <Sparkles size={11} class="text-amber-500" />
+                                        Tip: Include company culture, team dynamics, and growth opportunities
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    {/if}
+
+                    <!-- Step 2: Requirements -->
+                    {#if currentStep === 2}
+                        <div class="animate-fadeIn">
+                            <h4 class="text-lg font-bold text-base-content mb-1">Requirements & Responsibilities</h4>
+                            <p class="text-sm text-base-content/50 mb-6">
+                                Define what candidates need and what they'll do
+                            </p>
+
+                            <div class="space-y-5">
+                                <!-- Requirements Tags -->
+                                <div class="form-control flex flex-col gap-1.5">
+                                    <label class="text-sm font-semibold text-base-content">
+                                        Key Requirements <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="border-2 border-dashed border-base-300 rounded-xl p-3 bg-base-100 focus-within:border-purple-500 focus-within:bg-white transition-all">
+                                        <div class="flex flex-wrap gap-2 items-center min-h-[44px]">
+                                            {#each requirementTags as tag}
+                                                <span class="inline-flex items-center gap-1.5 bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-medium animate-popIn">
+                                                    {tag}
+                                                    <button
+                                                        type="button"
+                                                        class="opacity-70 hover:opacity-100 transition-opacity hover:rotate-90"
+                                                        onclick={() => removeTag(tag)}
+                                                    >
+                                                        <XCircle size={13} />
+                                                    </button>
+                                                </span>
+                                            {/each}
+                                            <input
+                                                type="text"
+                                                class="flex-1 min-w-[140px] border-none outline-none bg-transparent text-sm py-1 placeholder:text-base-content/30"
+                                                placeholder={requirementTags.length === 0
+                                                    ? "Type a requirement and press Enter..."
+                                                    : "Add another..."}
+                                                bind:value={newTagInput}
+                                                onkeydown={handleTagKeydown}
+                                            />
+                                        </div>
+                                    </div>
+                                    {#if stepErrors.requirements}
+                                        <p class="text-xs text-red-500">{stepErrors.requirements}</p>
+                                    {/if}
+                                    <p class="text-xs text-base-content/40">
+                                        Press <kbd class="kbd kbd-xs">Enter</kbd> to add each requirement as a tag
+                                    </p>
+                                    <!-- Suggestions -->
+                                    <div class="flex flex-wrap gap-1.5 mt-1">
+                                        {#each suggestedTags as sTag}
+                                            <button
+                                                type="button"
+                                                class="px-2.5 py-0.5 bg-base-200 hover:bg-purple-600 hover:text-white rounded-full text-[11px] text-base-content/60 transition-all border border-transparent hover:border-purple-400 hover:-translate-y-0.5"
+                                                onclick={() => addTag(sTag)}
+                                            >
+                                                + {sTag}
+                                            </button>
+                                        {/each}
                                     </div>
                                 </div>
-                                <div class="flex items-center justify-between">
-                                    <label
-                                        class="text-sm font-semibold text-gray-600"
-                                        for="currency">Currency</label
-                                    >
+
+                                <!-- Responsibilities -->
+                                <div class="form-control flex flex-col gap-1.5">
+                                    <label class="text-sm font-semibold text-base-content" for="responsibilities">
+                                        Responsibilities
+                                    </label>
+                                    <textarea
+                                        id="responsibilities"
+                                        class="textarea bg-base-100 border-base-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-28 rounded-xl w-full text-sm"
+                                        placeholder="• Lead technical architecture decisions&#10;• Mentor junior developers&#10;• Collaborate with product team"
+                                        bind:value={jobData.responsibilities}
+                                    ></textarea>
+                                    <p class="text-xs text-base-content/40">
+                                        Separate each responsibility with a new line
+                                    </p>
+                                </div>
+
+                                <!-- Benefits Grid -->
+                                <div class="form-control flex flex-col gap-2">
+                                    <label class="text-sm font-semibold text-base-content">
+                                        Benefits & Perks
+                                    </label>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        {#each benefitOptions as benefit}
+                                            {@const isSelected = selectedBenefits.includes(benefit.label)}
+                                            <button
+                                                type="button"
+                                                class="flex items-center gap-2 p-3 rounded-xl border-2 text-sm font-medium transition-all text-left
+                                                {isSelected
+                                                    ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-sm'
+                                                    : 'border-base-200 bg-base-100 text-base-content/70 hover:border-purple-300 hover:bg-purple-50/50'}"
+                                                onclick={() => toggleBenefit(benefit.id)}
+                                            >
+                                                <benefit.icon size={16} class="{isSelected ? 'text-purple-600' : 'text-base-content/30'}" />
+                                                <span class="flex-1 text-xs">{benefit.label}</span>
+                                                {#if isSelected}
+                                                    <Check size={14} class="text-emerald-500" />
+                                                {/if}
+                                            </button>
+                                        {/each}
+                                    </div>
+                                    <p class="text-xs text-base-content/40">
+                                        Click to select benefits your company offers
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    {/if}
+
+                    <!-- Step 3: Compensation -->
+                    {#if currentStep === 3}
+                        <div class="animate-fadeIn">
+                            <h4 class="text-lg font-bold text-base-content mb-1">Compensation</h4>
+                            <p class="text-sm text-base-content/50 mb-6">
+                                Set the salary range and job specifics
+                            </p>
+
+                            <div class="space-y-6">
+                                <!-- Salary Range -->
+                                <div class="bg-base-100 border border-base-200 rounded-2xl p-5">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <span class="text-sm font-semibold text-base-content">Annual Salary</span>
+                                        <span class="text-base font-bold text-purple-600 bg-white px-3 py-1 rounded-lg border border-base-200">
+                                            ${Number(jobData.salary_min || 0).toLocaleString()} — ${Number(jobData.salary_max || 0).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4 mb-4">
+                                        <div class="form-control flex flex-col gap-1">
+                                            <label class="text-xs font-medium text-base-content/50" for="salary-min">Minimum</label>
+                                            <input
+                                                id="salary-min"
+                                                type="number"
+                                                placeholder="50000"
+                                                class="input input-sm w-full bg-white border-base-200 focus:border-purple-500 rounded-lg text-sm"
+                                                bind:value={jobData.salary_min}
+                                            />
+                                        </div>
+                                        <div class="form-control flex flex-col gap-1">
+                                            <label class="text-xs font-medium text-base-content/50" for="salary-max">Maximum</label>
+                                            <input
+                                                id="salary-max"
+                                                type="number"
+                                                placeholder="85000"
+                                                class="input input-sm w-full bg-white border-base-200 focus:border-purple-500 rounded-lg text-sm"
+                                                bind:value={jobData.salary_max}
+                                            />
+                                        </div>
+                                    </div>
+                                    {#if stepErrors.salary}
+                                        <p class="text-xs text-red-500 mb-2">{stepErrors.salary}</p>
+                                    {/if}
+                                    <div class="flex items-center justify-between text-[11px] text-base-content/30">
+                                        <span>$30,000</span>
+                                        <span>$200,000+</span>
+                                    </div>
+                                </div>
+
+                                <!-- Currency -->
+                                <div class="form-control flex flex-col gap-1.5">
+                                    <label class="text-sm font-semibold text-base-content" for="currency">Currency</label>
                                     <select
                                         id="currency"
-                                        class="select select-sm select-ghost font-bold text-purple-600 focus:ring-0"
+                                        class="select w-full bg-base-100 border-base-300 focus:border-purple-500 rounded-xl text-sm"
                                         bind:value={jobData.salary_currency}
                                     >
-                                        <option value="USD">USD</option>
+                                        <option value="USD">USD ($)</option>
                                         <option value="ETB">ETB</option>
-                                        <option value="EUR">EUR</option>
-                                        <option value="GBP">GBP</option>
+                                        <option value="EUR">EUR (€)</option>
+                                        <option value="GBP">GBP (£)</option>
+                                        <option value="CAD">CAD ($)</option>
+                                        <option value="AUD">AUD ($)</option>
+                                        <option value="JPY">JPY (¥)</option>
                                     </select>
+                                </div>
+
+                                                <!-- Category -->
+                                <div class="form-control flex flex-col gap-1.5">
+                                        <label class="text-sm font-semibold text-base-content" for="category">
+                                            Category <span class="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            id="category"
+                                            class="select w-full bg-base-100 border-base-300 focus:border-purple-500 rounded-xl text-sm"
+                                            bind:value={jobData.category}
+                                        >
+                                            <option value="full_stack_developer">Full Stack Developer</option>
+                                            <option value="web_developer">Web Developer</option>
+                                            <option value="frontend_developer">Frontend Developer</option>
+                                            <option value="backend_developer">Backend Developer</option>
+                                            <option value="system_architect">System Architect</option>
+                                            <option value="mobile_developer">Mobile Developer</option>
+                                        </select>
+                                    </div>
+
+                                <!-- Job Type & Experience -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="form-control flex flex-col gap-1.5">
+                                        <label class="text-sm font-semibold text-base-content" for="job-type">
+                                            Job Type <span class="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            id="job-type"
+                                            class="select w-full bg-base-100 border-base-300 focus:border-purple-500 rounded-xl text-sm"
+                                            bind:value={jobData.job_type}
+                                        >
+                                            <option value="full-time">Full Time</option>
+                                            <option value="part-time">Part Time</option>
+                                            <option value="contract">Contract</option>
+                                            <option value="freelance">Freelance</option>
+                                            <option value="internship">Internship</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-control flex flex-col gap-1.5">
+                                        <label class="text-sm font-semibold text-base-content" for="experience-level">
+                                            Experience Level <span class="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            id="experience-level"
+                                            class="select w-full bg-base-100 border-base-300 focus:border-purple-500 rounded-xl text-sm"
+                                            bind:value={jobData.experience_level}
+                                        >
+                                            <option value="entry">Entry Level</option>
+                                            <option value="junior">Junior</option>
+                                            <option value="mid">Mid Level</option>
+                                            <option value="senior">Senior Level</option>
+                                            <option value="lead">Lead</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                    {/if}
 
-                        <div class="form-control">
-                            <h4
-                                class="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4 block"
-                            >
-                                Listing Expiration
-                            </h4>
-                            <div class="flex flex-col gap-2">
-                                <label
-                                    class="label text-sm font-semibold text-gray-600 pb-1"
-                                    for="expires-at">Expires At</label
-                                >
-                                <input
-                                    id="expires-at"
-                                    type="date"
-                                    class="input bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-purple-600 rounded-xl"
-                                    bind:value={jobData.expires_at}
-                                />
-                            </div>
-                            <p
-                                class="text-[11px] text-gray-400 mt-2 px-1 italic"
-                            >
-                                When should this job posting be automatically
-                                removed?
+                    <!-- Step 4: Publishing -->
+                    {#if currentStep === 4}
+                        <div class="animate-fadeIn">
+                            <h4 class="text-lg font-bold text-base-content mb-1">Publishing</h4>
+                            <p class="text-sm text-base-content/50 mb-6">
+                                Review and publish your job posting
                             </p>
+
+                            <div class="space-y-5">
+                                <!-- AI Enhance Card -->
+                                <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-5">
+                                    <div class="flex items-start gap-4">
+                                        <div class="w-11 h-11 rounded-xl bg-purple-600 flex items-center justify-center shrink-0">
+                                            <Sparkles size={20} class="text-white" />
+                                        </div>
+                                        <div class="flex-1">
+                                            <h5 class="text-sm font-bold text-purple-900">Enhance with AI</h5>
+                                            <p class="text-xs text-purple-600/70 mt-0.5">
+                                                AI reads everything you entered and optimizes the title, description, requirements, and responsibilities.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm bg-purple-600 hover:bg-purple-700 text-white border-none rounded-lg gap-1.5 font-semibold mt-3 shadow-lg shadow-purple-200"
+                                                onclick={enhanceWithAi}
+                                                disabled={enhancing}
+                                            >
+                                                {#if enhancing}
+                                                    <span class="loading loading-spinner loading-xs"></span>
+                                                    Enhancing...
+                                                {:else}
+                                                    <Sparkles size={14} />
+                                                    Generate AI Post
+                                                {/if}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="flex items-center gap-3 p-4 bg-base-100 border-2 rounded-xl cursor-pointer transition-all hover:border-purple-300 hover:bg-purple-50/30 {jobData.remote_possible ? 'border-purple-400 bg-purple-50/50' : 'border-base-200'}"
+                                    onclick={() => (jobData.remote_possible = !jobData.remote_possible)}
+                                    role="button"
+                                    tabindex="0"
+                                    onkeydown={(e) => e.key === 'Enter' && (jobData.remote_possible = !jobData.remote_possible)}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        class="checkbox checkbox-sm checkbox-primary rounded-md"
+                                        bind:checked={jobData.remote_possible}
+                                    />
+                                    <div>
+                                        <p class="text-sm font-semibold text-base-content">This is a remote position</p>
+                                        <p class="text-xs text-base-content/50">Candidates can work from anywhere</p>
+                                    </div>
+                                </div>
+
+                                <!-- Expiry & Status -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="form-control flex flex-col gap-1.5">
+                                        <label class="text-sm font-semibold text-base-content" for="expires-at">
+                                            Application Deadline
+                                        </label>
+                                        <div class="relative">
+                                            <Calendar
+                                                size={16}
+                                                class="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/30"
+                                            />
+                                            <input
+                                                id="expires-at"
+                                                type="date"
+                                                class="input w-full pl-10 bg-base-100 border-base-300 focus:border-purple-500 rounded-xl text-sm"
+                                                bind:value={jobData.expires_at}
+                                            />
+                                        </div>
+                                        <p class="text-xs text-base-content/40">
+                                            Leave blank for no deadline
+                                        </p>
+                                    </div>
+                                    <div class="bg-base-100 border border-base-200 rounded-xl p-4">
+                                        <p class="text-xs font-bold text-base-content/40 uppercase tracking-wider mb-2">Publishing Status</p>
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+                                            <span class="text-sm font-semibold text-base-content">Save as Draft</span>
+                                        </div>
+                                        <p class="text-xs text-base-content/40 mt-1">
+                                            You can publish later from the job management page
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    {/if}
                 </form>
             </div>
 
-            <!-- Modal Action -->
-            <div
-                class="p-8 bg-gray-50/50 flex justify-end gap-3 border-t border-gray-100"
-            >
-                <button
-                    type="button"
-                    class="btn btn-ghost rounded-lg px-6 font-bold text-gray-500 hover:bg-gray-100"
-                    onclick={close}
-                >
-                    Cancel
-                </button>
-                <button
-                    type="submit"
-                    class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-10 rounded-lg shadow-lg shadow-purple-100 font-bold"
-                    onclick={submit}
-                >
-                    Create Job Post
-                </button>
+            <!-- Modal Footer -->
+            <div class="px-8 py-5 bg-base-100/50 border-t border-base-200 flex items-center justify-between">
+                <div class="flex items-center gap-2 text-xs text-base-content/40">
+                    {#if currentStep < totalSteps}
+                        <div class="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                        Draft in progress
+                    {/if}
+                </div>
+                <div class="flex items-center gap-3">
+                    {#if currentStep > 1}
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-ghost rounded-lg gap-1 text-base-content/60"
+                            onclick={prevStep}
+                        >
+                            <ArrowLeft size={14} />
+                            Back
+                        </button>
+                    {/if}
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-ghost rounded-lg text-base-content/60"
+                        onclick={close}
+                    >
+                        Cancel
+                    </button>
+                    {#if currentStep < totalSteps}
+                        <button
+                            type="button"
+                            class="btn btn-sm bg-purple-600 hover:bg-purple-700 text-white border-none rounded-lg gap-1.5 font-semibold shadow-lg shadow-purple-100"
+                            onclick={nextStep}
+                        >
+                            Next Step
+                            <ArrowRight size={14} />
+                        </button>
+                    {:else}
+                        <button
+                            type="button"
+                            class="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white border-none rounded-lg gap-1.5 font-semibold shadow-lg shadow-emerald-100"
+                            onclick={submit}
+                        >
+                            <Check size={14} />
+                            Post Job
+                        </button>
+                    {/if}
+                </div>
             </div>
         </div>
     </div>
@@ -440,21 +879,45 @@
 
 <style>
     .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
+        width: 5px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
+        background: transparent;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #ddd;
+        background: #d1d5db;
         border-radius: 10px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #ccc;
+        background: #9ca3af;
     }
 
-    .font-display {
-        font-family: "Inter", sans-serif;
+    :global(.animate-fadeIn) {
+        animation: fadeIn 0.3s ease;
+    }
+    :global(.animate-popIn) {
+        animation: popIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes popIn {
+        0% {
+            transform: scale(0.85);
+            opacity: 0;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
     }
 </style>

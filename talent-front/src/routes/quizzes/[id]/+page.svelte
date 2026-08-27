@@ -588,6 +588,19 @@
                                 <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                     Your Solution
                                 </label>
+                                <button
+                                    onclick={runCode}
+                                    disabled={isRunningCode || !code.trim()}
+                                    class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-xs px-4 py-2 rounded-lg transition-all active:scale-95"
+                                >
+                                    {#if isRunningCode}
+                                        <Loader2 size={13} class="animate-spin" />
+                                        Running...
+                                    {:else}
+                                        <Play size={13} fill="currentColor" />
+                                        Run Code
+                                    {/if}
+                                </button>
                             </div>
                             <textarea
                                 bind:value={code}
