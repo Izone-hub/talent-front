@@ -48,5 +48,9 @@ export const cvService = {
      */
     deleteCV: async (id) => {
         return apiClient.delete(`/cv/${id}`);
+    },
+
+    listVersions: async () => {
+        return apiClient.get('/cv/versions');
     }
 };

@@ -1,9 +1,11 @@
 <script>
 	import { onMount } from "svelte";
+	import { navigating } from "$app/stores";
 	import { auth } from "$lib/stores/authStore";
 	import DefaultLayout from "$lib/components/layout/DefaultLayout.svelte";
 	import AdminLayout from "$lib/components/layout/AdminLayout.svelte";
 	import Toast from "$lib/components/ui/toast.svelte";
+	import GlobalLoadingOverlay from "$lib/components/ui/GlobalLoadingOverlay.svelte";
 	import "./layout.css";
 	import favicon from "$lib/assets/icons/izone-favicon.svg";
 
@@ -26,17 +28,19 @@
 	/>
 </svelte:head>
 
-{#if $auth.loading}
-	<div class="flex h-screen items-center justify-center bg-gray-50">
-		<div class="loading loading-spinner loading-lg text-purple-600"></div>
-	</div>
-{:else if $auth.isAuthenticated && $auth.user?.role === "admin"}
+{#if $navigating}
+	<progress class="progress progress-primary fixed left-0 top-0 z-[99999] h-1 w-full rounded-none"></progress>
+{/if}
+
+<GlobalLoadingOverlay show={$auth.loading} message="Authenticating..." />
+
+{#if $auth.isAuthenticated && $auth.user?.role === "admin"}
 	<AdminLayout>
 		<slot />
-		<Toast />
 	</AdminLayout>
 {:else}
 	<DefaultLayout>
 		<slot />
 	</DefaultLayout>
 {/if}
+<Toast />

@@ -1,33 +1,27 @@
 <script>
-    import { onMount } from "svelte";
     import { jobService } from "$lib/api/job.service";
     import {
         Plus,
         Briefcase,
         MapPin,
         Clock,
-        MoreVertical,
-        ExternalLink,
-        CheckCircle2,
-        Archive,
         Search,
-        Filter,
-        XCircle,
     } from "lucide-svelte";
+    import PageLoader from "$lib/components/ui/PageLoader.svelte";
+    import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import { showToast } from "$lib/stores/toast";
     import CreateJobModal from "$lib/components/modals/admin/jobs/CreateJobModal.svelte";
     import JobDetailModal from "$lib/components/modals/admin/jobs/job-detail.svelte";
 
-    let jobs = [];
-    let loading = true;
-    let isCreateModalOpen = false;
-    let isDetailModalOpen = false;
-    let selectedJob = null;
-    let searchQuery = "";
-    let currentTab = "published";
+    let jobs = $state([]);
+    let loading = $state(true);
+    let isCreateModalOpen = $state(false);
+    let isDetailModalOpen = $state(false);
+    let selectedJob = $state(null);
+    let searchQuery = $state("");
+    let currentTab = $state("published");
 
-    // Form state for new job
-    let newJob = {
+    let newJob = $state({
         title: "",
         company: "",
         company_logo: "",
@@ -45,10 +39,21 @@
         salary_max: null,
         salary_currency: "USD",
         expires_at: "",
-    };
+    });
 
-    onMount(async () => {
-        await loadJobs();
+    let filteredJobs = $derived(jobs.filter((job) => {
+        const matchesSearch =
+            job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            job.location?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        const status = job.status?.toLowerCase() || "draft";
+        const matchesTab = status === currentTab;
+
+        return matchesSearch && matchesTab;
+    }));
+
+    $effect(() => {
+        loadJobs();
     });
 
     async function loadJobs() {
@@ -63,13 +68,11 @@
         }
     }
 
-    async function handleCreateJob(event) {
-        const jobData = event.detail;
+    async function handleCreateJob(jobData) {
         try {
             await jobService.createJob(jobData);
             showToast("Job created successfully", "success");
             isCreateModalOpen = false;
-            // Reset form
             newJob = {
                 title: "",
                 company: "",
@@ -80,13 +83,13 @@
                 requirements: "",
                 responsibilities: "",
                 benefits: "",
-                job_type: "full-time",
-                experience_level: "entry",
+                job_type: "",
+                experience_level: "",
                 location: "",
                 remote_possible: false,
                 salary_min: null,
                 salary_max: null,
-                salary_currency: "USD",
+                salary_currency: "",
                 expires_at: "",
             };
             await loadJobs();
@@ -101,7 +104,7 @@
             else if (action === "close") await jobService.closeJob(id);
             else if (action === "archive") await jobService.archiveJob(id);
 
-            showToast(`Job ${action}ed successfuly`, "success");
+            showToast(`Job ${action}ed successfully`, "success");
             await loadJobs();
         } catch (error) {
             showToast(`Failed to ${action} job`, "error");
@@ -125,17 +128,6 @@
                 return "badge-warning";
         }
     }
-
-    $: filteredJobs = jobs.filter((job) => {
-        const matchesSearch =
-            job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            job.location?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const status = job.status?.toLowerCase() || "draft";
-        const matchesTab = status === currentTab;
-
-        return matchesSearch && matchesTab;
-    });
 </script>
 
 <div class="space-y-8 max-w-full mx-auto">
@@ -153,7 +145,7 @@
         </div>
         <button
             class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-6 shadow-none"
-            on:click={() => (isCreateModalOpen = true)}
+            onclick={() => (isCreateModalOpen = true)}
         >
             <Plus size={20} class="mr-2" />
             Post New Job
@@ -164,44 +156,58 @@
     <div
         class="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-4 rounded-lg border border-gray-100 px-6"
     >
-        <div class="tabs tabs-boxed bg-gray-100/50 p-1 gap-1 rounded-lg">
+        <div class="tabs tabs-bordered p-1 gap-1 rounded-lg">
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "published"}
+                class:tab-active={currentTab === "published"}
                 class:text-purple-600={currentTab === "published"}
-                on:click={() => (currentTab = "published")}
+                onclick={() => (currentTab = "published")}
             >
                 Published
-                <!-- <span
-                    class="ml-2 badge badge-sm badge-success text-white font-bold"
+                <span
+                    class="ml-2 text-xs opacity-60"
                 >
-                    {jobs.filter((j) => j.status?.toLowerCase() === "published")
-                        .length}
-                </span> -->
+                    ({jobs.filter((j) => j.status?.toLowerCase() === "published").length})
+                </span>
             </button>
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "draft"}
+                class:tab-active={currentTab === "draft"}
                 class:text-purple-600={currentTab === "draft"}
-                on:click={() => (currentTab = "draft")}
+                onclick={() => (currentTab = "draft")}
             >
                 Drafts
+                <span
+                    class="ml-2 text-xs opacity-60"
+                >
+                    ({jobs.filter((j) => j.status?.toLowerCase() === "draft").length})
+                </span>
             </button>
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "closed"}
+                class:tab-active={currentTab === "closed"}
                 class:text-purple-600={currentTab === "closed"}
-                on:click={() => (currentTab = "closed")}
+                onclick={() => (currentTab = "closed")}
             >
                 Closed
+                <span
+                    class="ml-2 text-xs opacity-60"
+                >
+                    ({jobs.filter((j) => (j.status?.toLowerCase() === "closed")).length})
+                </span>
             </button>
             <button
                 class="tab rounded-lg transition-all duration-200 h-10 px-4"
-                class:bg-white={currentTab === "archived"}
+                class:tab-active={currentTab === "archived"}
                 class:text-purple-600={currentTab === "archived"}
-                on:click={() => (currentTab = "archived")}
+                onclick={() => (currentTab = "archived")}
             >
                 Archived
+                <span
+                    class="ml-2 text-xs opacity-60"
+                >
+                    ({jobs.filter((j) => (j.status?.toLowerCase() === "archived")).length})
+                </span>
             </button>
         </div>
 
@@ -222,29 +228,15 @@
     <!-- Jobs List -->
     <div class="bg-white rounded-lg border border-gray-100 overflow-hidden">
         {#if loading}
-            <div class="flex flex-col items-center justify-center py-24 gap-4">
-                <span class="loading loading-spinner loading-lg text-purple-600"
-                ></span>
-                <span class="text-gray-400 font-medium tracking-wide"
-                    >Fetching your job data...</span
-                >
-            </div>
+            <PageLoader message="Fetching your job data..." />
         {:else if filteredJobs.length === 0}
-            <div class="py-24 text-center">
-                <div
-                    class="inline-flex items-center justify-center w-20 h-20 bg-gray-50 text-gray-300 rounded-full mb-4"
-                >
-                    <Briefcase size={32} />
-                </div>
-                <h3 class="text-lg font-semibold text-gray-900">
-                    No jobs found
-                </h3>
-                <p class="text-gray-500 max-w-xs mx-auto mt-2">
-                    {searchQuery
-                        ? "We couldn't find any jobs matching your search."
-                        : "Start by posting your first job opportunity to attract talent."}
-                </p>
-            </div>
+            <EmptyState
+                icon={Briefcase}
+                title="No jobs found"
+                description={searchQuery
+                    ? "We couldn't find any jobs matching your search."
+                    : "Start by posting your first job opportunity to attract talent."}
+            />
         {:else}
             <div class="overflow-x-auto">
                 <table class="table table-lg">
@@ -323,7 +315,7 @@
                                     <div class="dropdown dropdown-end">
                                         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                                         <button
-                                            on:click={() => openJobDetail(job)}
+                                            onclick={() => openJobDetail(job)}
                                             class="text-purple-600 text-sm"
                                         >
                                             Details
@@ -339,22 +331,21 @@
     </div>
 </div>
 
-<!-- Create Job Modal Component -->
 <CreateJobModal
     isOpen={isCreateModalOpen}
     jobData={newJob}
-    on:close={() => (isCreateModalOpen = false)}
-    on:submit={handleCreateJob}
+    onclose={() => (isCreateModalOpen = false)}
+    onsubmit={handleCreateJob}
 />
 
 <JobDetailModal
     isOpen={isDetailModalOpen}
     job={selectedJob}
-    on:close={() => {
+    onclose={() => {
         isDetailModalOpen = false;
         selectedJob = null;
     }}
-    on:jobUpdated={async () => {
+    onjobUpdated={async () => {
         await loadJobs();
     }}
 />

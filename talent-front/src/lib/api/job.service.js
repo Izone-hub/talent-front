@@ -84,5 +84,15 @@ export const jobService = {
     archiveJob: async (id) => {
         const response = await apiClient.patch(`/jobs/${id}/archive`);
         return response;
+    },
+
+    /**
+     * Apply for a job
+     * @param {string} jobId
+     * @returns {Promise<{message: string, application_id: string}>}
+     */
+    applyForJob: async (jobId) => {
+        const response = await apiClient.post(`/jobs/${jobId}/apply`);
+        return response;
     }
 };

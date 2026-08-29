@@ -140,7 +140,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            on:click={close}
+            onclick={close}
         ></div>
 
         <!-- Modal -->
@@ -160,7 +160,7 @@
                     </p>
                 </div>
                 <button
-                    on:click={close}
+                    onclick={close}
                     class="p-2.5 bg-slate-50 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
                 >
                     <X size={20} />
@@ -360,7 +360,7 @@
                                         >Options</span
                                     >
                                     <button
-                                        on:click={addOption}
+                                        onclick={addOption}
                                         class="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
                                     >
                                         <Plus size={14} /> Add Option
@@ -397,7 +397,7 @@
                                             />
                                             {#if questionData.options.length > 1}
                                                 <button
-                                                    on:click={() =>
+                                                    onclick={() =>
                                                         removeOption(i)}
                                                     class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                                                 >
@@ -508,7 +508,7 @@
                                             Test Cases
                                         </div>
                                         <button
-                                            on:click={addTestCase}
+                                            onclick={addTestCase}
                                             class="btn btn-xs btn-ghost text-indigo-600 font-bold hover:bg-indigo-50"
                                         >
                                             <Plus size={14} /> Add Test Case
@@ -588,7 +588,7 @@
                                                     </div>
                                                     {#if questionData.coding_details.test_cases.length > 1}
                                                         <button
-                                                            on:click={() =>
+                                                            onclick={() =>
                                                                 removeTestCase(
                                                                     i,
                                                                 )}
@@ -637,7 +637,7 @@
                                         >
                                             {tag}
                                             <button
-                                                on:click={() => removeTag(tag)}
+                                                onclick={() => removeTag(tag)}
                                                 class="hover:text-rose-500"
                                                 ><X size={12} /></button
                                             >
@@ -655,7 +655,7 @@
                                         <input
                                             type="text"
                                             bind:value={tagSearchQuery}
-                                            on:focus={() =>
+                                            onfocus={() =>
                                                 (showTagDropdown = true)}
                                             placeholder="Search and select tags..."
                                             class="bg-transparent border-none focus:ring-0 text-sm w-full py-1 h-8"
@@ -668,7 +668,7 @@
                                         <!-- svelte-ignore a11y_no_static_element_interactions -->
                                         <div
                                             class="fixed inset-0 z-20"
-                                            on:click={() =>
+                                            onclick={() =>
                                                 (showTagDropdown = false)}
                                         ></div>
 
@@ -686,7 +686,7 @@
                                                     {#each filteredAvailableTags as tag}
                                                         <button
                                                             type="button"
-                                                            on:click={() =>
+                                                            onclick={() =>
                                                                 toggleTag(
                                                                     tag.Name ||
                                                                         tag.name,
@@ -745,13 +745,13 @@
                 </div>
                 <div class="flex gap-3">
                     <button
-                        on:click={close}
+                        onclick={close}
                         class="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
                     >
                         Cancel
                     </button>
                     <button
-                        on:click={handleSubmit}
+                        onclick={handleSubmit}
                         class="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 transition-all active:scale-95"
                     >
                         Create Question

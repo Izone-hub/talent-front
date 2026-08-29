@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    import { goto } from "$app/navigation";
     import { auth } from "$lib/stores/authStore";
     import { cvService } from "$lib/api/cv.service";
     import {
@@ -8,6 +9,8 @@
         formatRelativeTime,
     } from "$lib/utils/dateFormatter";
     import { showToast } from "$lib/stores/toast";
+    import GlobalLoadingOverlay from "$lib/components/ui/GlobalLoadingOverlay.svelte";
+    import SavedJobs from "$lib/components/jobs/SavedJobs.svelte";
     import {
         Upload,
         Github,
@@ -38,9 +41,26 @@
     let currentCV = null;
     let cvVersions = [];
     let activeTab = "profile";
+    let githubStats = null;
+
+    $: {
+        if (user?.github_username && !githubStats) {
+            fetchGitHubStats(user.github_username);
+        }
+    }
+
+    async function fetchGitHubStats(username) {
+        try {
+            const res = await fetch(`https://api.github.com/users/${username}`);
+            if (res.ok) {
+                githubStats = await res.json();
+            }
+        } catch (err) {
+            console.error("Failed to fetch GitHub stats:", err);
+        }
+    }
 
     onMount(async () => {
-        // Initial check if user is already loaded
         if (user) {
             await loadCVData();
         }
@@ -98,6 +118,7 @@
 
             // Show success notification (if you have one)
             showToast("CV uploaded successfully!", "success");
+            goto("/jobs");
         } catch (error) {
             console.error("Error uploading CV:", error);
             showToast("Failed to upload CV: " + error.message, "error");
@@ -128,18 +149,10 @@
     }
 </script>
 
+<GlobalLoadingOverlay show={$auth.loading} message="Syncing with GitHub..." />
+
 <div class="min-h-screen bg-slate-50 font-sans">
-    {#if $auth.loading}
-        <div class="flex h-screen w-full items-center justify-center">
-            <div class="flex flex-col items-center gap-4">
-                <span class="loading loading-spinner loading-lg text-indigo-600"
-                ></span>
-                <p class="text-sm font-medium text-slate-500 italic">
-                    Syncing with GitHub...
-                </p>
-            </div>
-        </div>
-    {:else if !$auth.isAuthenticated}
+    {#if !$auth.isAuthenticated}
         <div class="flex h-screen w-full items-center justify-center">
             <div
                 class="text-center p-8 bg-white border border-slate-200 rounded-2xl shadow-sm max-w-md"
@@ -153,7 +166,7 @@
                     professional profile.
                 </p>
                 <button
-                    on:click={() => auth.loginWithGithub()}
+                    onclick={() => auth.loginWithGithub()}
                     class="btn btn-primary w-full border-none bg-purple-600 hover:bg-purple-700 text-white"
                 >
                     <Github class="h-4 w-4" />
@@ -195,7 +208,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.public_repos || 0}
+                            {githubStats?.public_repos ?? user?.public_repos ?? 0}
                         </p>
                     </div>
                     <div
@@ -211,7 +224,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.followers || 0}
+                            {githubStats?.followers ?? user?.followers ?? 0}
                         </p>
                     </div>
                     <div
@@ -227,7 +240,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.following || 0}
+                            {githubStats?.following ?? user?.following ?? 0}
                         </p>
                     </div>
                     <div
@@ -243,7 +256,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {user?.public_gists || 0}
+                            {githubStats?.public_gists ?? user?.public_gists ?? 0}
                         </p>
                     </div>
                 </div>
@@ -255,7 +268,7 @@
                         <div class="space-y-6">
                             <!-- Profile Card -->
                             <div
-                                class="overflow-hidden rounded-lg border border-slate-200 bg-white pb-6"
+                                class="overflow-hidden rounded-lg border border-slate-200 bg-white pb-12"
                             >
                                 <div
                                     class="h-24 bg-gradient-to-r from-[#e9ecef] to-[#ced4da]"
@@ -297,45 +310,6 @@
                                                 {user.bio}
                                             </p>
                                         {/if}
-
-                                        <div
-                                            class="space-y-2 text-sm text-slate-500"
-                                        >
-                                            {#if user?.location}
-                                                <div
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <MapPin class="h-4 w-4" />
-                                                    <span>{user.location}</span>
-                                                </div>
-                                            {/if}
-                                            {#if user?.blog}
-                                                <div
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <LinkIcon class="h-4 w-4" />
-                                                    <a
-                                                        href={user.blog.startsWith(
-                                                            "http",
-                                                        )
-                                                            ? user.blog
-                                                            : `https://${user.blog}`}
-                                                        target="_blank"
-                                                        class="text-indigo-600 hover:underline"
-                                                        >{user.blog}</a
-                                                    >
-                                                </div>
-                                            {/if}
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <Mail class="h-4 w-4" />
-                                                <span
-                                                    >{user?.email ||
-                                                        "N/A"}</span
-                                                >
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -410,7 +384,7 @@
                                                     class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                                                 >
                                                     <button
-                                                        on:click={() =>
+                                                        onclick={() =>
                                                             downloadCV(
                                                                 currentCV.id,
                                                             )}
@@ -431,7 +405,7 @@
                                             type="file"
                                             id="cv-upload"
                                             accept=".pdf,.doc,.docx"
-                                            on:change={handleCVUpload}
+                                            onchange={handleCVUpload}
                                             class="hidden"
                                             disabled={isLoading}
                                         />
@@ -525,7 +499,7 @@
                                                             class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                                                         >
                                                             <button
-                                                                on:click={() =>
+                                                                onclick={() =>
                                                                     downloadCV(
                                                                         version.id,
                                                                     )}
@@ -537,10 +511,10 @@
                                                                 />
                                                             </button>
                                                             <button
-                                                                on:click={() =>
-                                                                    deleteCV(
-                                                                        version.id,
-                                                                    )}
+                                                            onclick={() =>
+                                                                deleteCV(
+                                                                    version.id,
+                                                                )}
                                                                 class="btn btn-ghost btn-xs text-slate-400 hover:text-rose-600"
                                                                 title="Delete"
                                                             >
@@ -560,7 +534,7 @@
                     </div>
                 {/if}
 
-                {#if activeTab === "applications" || activeTab === "saved"}
+                {#if activeTab === "applications"}
                     <div
                         class="py-20 text-center text-slate-500 bg-white rounded-2xl border border-slate-200"
                     >
@@ -574,6 +548,10 @@
                             Application tracking is currently being integrated.
                         </p>
                     </div>
+                {/if}
+
+                {#if activeTab === "saved"}
+                    <SavedJobs />
                 {/if}
             </div>
         </div>

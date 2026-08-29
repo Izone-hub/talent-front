@@ -28,7 +28,7 @@
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <div class="modal {isOpen ? 'modal-open' : ''} modal-bottom sm:modal-middle" role="dialog">
 	<div class="relative modal-box max-w-5xl text-center">
-		<button class="btn absolute top-2 right-2 btn-circle btn-ghost btn-sm" on:click={close}
+		<button class="btn absolute top-2 right-2 btn-circle btn-ghost btn-sm" onclick={close}
 			>✕</button
 		>
 
@@ -60,12 +60,12 @@
 		</p>
 
 		<div class="mx-auto modal-action max-w-lg items-center justify-center">
-			<button class="btn w-full btn-primary" on:click={handleContinue}
+			<button class="btn w-full btn-primary" onclick={handleContinue}
 				>Continue with GitHub <ArrowBigRight class="ml-2 inline-block h-4 w-4" /></button
 			>
 		</div>
 	</div>
 
 	<!-- svelte-ignore a11y_label_has_associated_control -->
-	<label class="modal-backdrop" on:click={close}>Close</label>
+	<label class="modal-backdrop" onclick={close}>Close</label>
 </div>

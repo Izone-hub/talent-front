@@ -1,11 +1,10 @@
 <script>
     import { XCircle, Globe, MapPin, Building2, Image } from "lucide-svelte";
-    import { createEventDispatcher } from "svelte";
     import { jobService } from "$lib/api/job.service";
 
-    const dispatch = createEventDispatcher();
-
     export let isOpen = false;
+    export let onclose = () => {};
+    export let onsubmit = (data) => {};
     export let jobData = {
         title: "",
         company: "",
@@ -16,22 +15,22 @@
         requirements: "",
         responsibilities: "",
         benefits: "",
-        job_type: "full-time",
-        experience_level: "entry",
+        job_type: "",
+        experience_level: "",
         location: "",
         remote_possible: false,
         salary_min: null,
         salary_max: null,
-        salary_currency: "USD",
+        salary_currency: "",
         expires_at: "",
     };
 
     function close() {
-        dispatch("close");
+        onclose();
     }
 
-    function submit() {
-        // Convert empty strings to null for optional pointer fields if needed by API
+    function submit(e) {
+        e.preventDefault();
         const payload = { ...jobData };
         if (!payload.company_logo) payload.company_logo = null;
         if (!payload.company_website) payload.company_website = null;
@@ -43,7 +42,6 @@
         if (!payload.expires_at) {
             payload.expires_at = null;
         } else if (payload.expires_at.length === 10) {
-            // YYYY-MM-DD to ISO RFC3339 format
             payload.expires_at = payload.expires_at + "T23:59:59Z";
         }
 
@@ -59,16 +57,18 @@
 
         payload.status = "draft";
 
-        dispatch("submit", payload);
+        onsubmit(payload);
     }
 </script>
 
-{#if isOpen}
+    {#if isOpen}
     <div
         class="modal modal-open bg-black/40 backdrop-blur-sm transition-all duration-300 z-[100]"
+        onclick={close}
     >
         <div
             class="modal-box max-w-5xl rounded-lg p-0 overflow-hidden border-none scale-95"
+            onclick={(e) => e.stopPropagation()}
         >
             <!-- Modal Header -->
             <div class="bg-purple-600 p-8 text-white relative">
@@ -80,7 +80,7 @@
                 </p>
                 <button
                     class="absolute top-8 right-8 text-white/80 hover:text-white transition-transform hover:rotate-90"
-                    on:click={close}
+                    onclick={close}
                     type="button"
                     aria-label="Close modal"
                 >
@@ -92,7 +92,7 @@
             <div
                 class="p-8 max-h-[75vh] overflow-y-auto custom-scrollbar text-gray-700 bg-white"
             >
-                <form on:submit|preventDefault={submit} class="space-y-8">
+                <form onsubmit={submit} class="space-y-8">
                     <!-- Section: Basic Job Info -->
                     <div>
                         <h4
@@ -422,14 +422,14 @@
                 <button
                     type="button"
                     class="btn btn-ghost rounded-lg px-6 font-bold text-gray-500 hover:bg-gray-100"
-                    on:click={close}
+                    onclick={close}
                 >
                     Cancel
                 </button>
                 <button
                     type="submit"
                     class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-10 rounded-lg shadow-lg shadow-purple-100 font-bold"
-                    on:click={submit}
+                    onclick={submit}
                 >
                     Create Job Post
                 </button>

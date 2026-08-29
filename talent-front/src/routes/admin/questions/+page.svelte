@@ -21,6 +21,8 @@
         ToggleLeft,
     } from "lucide-svelte";
     import { showToast } from "$lib/stores/toast";
+    import SkeletonTable from "$lib/components/ui/SkeletonTable.svelte";
+    import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import CreateQuestionModal from "$lib/components/modals/admin/question/CreateQuestionModal.svelte";
     import QuestionDetailModal from "$lib/components/modals/admin/question/QuestionDetailModal.svelte";
     import DeleteConfirmationModal from "$lib/components/modals/admin/common/DeleteConfirmationModal.svelte";
@@ -232,7 +234,7 @@
         <div class="flex items-center gap-3">
             <button
                 class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-6 shadow-none"
-                on:click={() => (isCreateModalOpen = true)}
+                onclick={() => (isCreateModalOpen = true)}
             >
                 <Plus size={18} />
                 Create Question
@@ -307,6 +309,21 @@
     </div>
 
     <!-- Table -->
+    {#if loading}
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <SkeletonTable rows={5} cols={8} />
+    </div>
+    {:else if filteredQuestions.length === 0}
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <EmptyState
+            icon={HelpCircle}
+            title="No questions found"
+            description={searchQuery
+                ? "We couldn't find any questions matching your search criteria."
+                : "Your question bank is empty. Start by creating your first question."}
+        />
+    </div>
+    {:else}
     <div
         class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm h-[calc(100vh-200px)] overflow-y-auto"
     >
@@ -321,7 +338,7 @@
                                 type="checkbox"
                                 class="checkbox checkbox-xs border-gray-300 focus:ring-indigo-500 rounded text-indigo-600"
                                 checked={allSelected}
-                                on:change={toggleSelectAll}
+                                onchange={toggleSelectAll}
                             />
                         </th>
                         <th class="px-4 py-4 min-w-[300px]">Question</th>
@@ -335,50 +352,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                    {#if loading}
-                        <tr>
-                            <td colspan="9" class="py-24 text-center">
-                                <div
-                                    class="flex flex-col items-center justify-center gap-4"
-                                >
-                                    <span
-                                        class="loading loading-spinner loading-lg text-indigo-600"
-                                    ></span>
-                                    <span
-                                        class="text-gray-400 font-medium tracking-wide"
-                                        >Fetching your question bank...</span
-                                    >
-                                </div>
-                            </td>
-                        </tr>
-                    {:else if filteredQuestions.length === 0}
-                        <tr>
-                            <td colspan="9" class="py-24 text-center">
-                                <div
-                                    class="flex flex-col items-center justify-center"
-                                >
-                                    <div
-                                        class="inline-flex items-center justify-center w-20 h-20 bg-gray-50 text-gray-300 rounded-full mb-4"
-                                    >
-                                        <HelpCircle size={32} />
-                                    </div>
-                                    <h3
-                                        class="text-lg font-semibold text-gray-900"
-                                    >
-                                        No questions found
-                                    </h3>
-                                    <p
-                                        class="text-gray-500 max-w-xs mx-auto mt-2"
-                                    >
-                                        {searchQuery
-                                            ? "We couldn't find any questions matching your search criteria."
-                                            : "Your question bank is empty. Start by creating your first question."}
-                                    </p>
-                                </div>
-                            </td>
-                        </tr>
-                    {:else}
-                        {#each filteredQuestions as q}
+                    {#each filteredQuestions as q}
                             {@const TypeIcon = getTypeIcon(q.question_type)}
                             <tr
                                 class="hover:bg-gray-50/30 transition-colors group"
@@ -389,7 +363,7 @@
                                         type="checkbox"
                                         class="checkbox checkbox-xs border-gray-300 focus:ring-indigo-500 rounded text-indigo-600"
                                         checked={selectedIds.has(q.id)}
-                                        on:change={() => toggleSelect(q.id)}
+                                        onchange={() => toggleSelect(q.id)}
                                     />
                                 </td>
                                 <td class="px-4 py-5">
@@ -503,7 +477,7 @@
                                         <button
                                             class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
                                             title="View details"
-                                            on:click={() =>
+                                            onclick={() =>
                                                 openDetailModal(q.id)}
                                         >
                                             <Eye size={18} />
@@ -511,7 +485,7 @@
                                         <button
                                             class="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                                             title="Delete question"
-                                            on:click={() =>
+                                            onclick={() =>
                                                 openDeleteModal(q.id)}
                                         >
                                             <Trash2 size={18} />
@@ -520,7 +494,6 @@
                                 </td>
                             </tr>
                         {/each}
-                    {/if}
                 </tbody>
             </table>
         </div>
@@ -545,7 +518,7 @@
                         </span>
                         <button
                             class="text-[10px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 transition-colors uppercase tracking-wider"
-                            on:click={openBulkDeleteModal}
+                            onclick={openBulkDeleteModal}
                         >
                             Delete selected
                         </button>
@@ -576,6 +549,7 @@
             </div>
         </div>
     </div>
+    {/if}
 </div>
 
 <CreateQuestionModal

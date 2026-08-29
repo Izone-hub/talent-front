@@ -1,23 +1,107 @@
 <script>
-	/** @type {any} */
-	export let job = null;
-	export let modalId = "job-detail-modal";
-	export let loading = false;
 	import { Bookmark } from "@lucide/svelte";
+	import { goto } from "$app/navigation";
 	import { auth } from "$lib/stores/authStore";
-	$: requirementsList = job?.requirements
-		? job.requirements
-				.split(",")
-				.map((r) => r.trim())
-				.filter((r) => r)
-		: [];
+	import { jobService } from "$lib/api/job.service";
+	import { cvService } from "$lib/api/cv.service";
+	import { savedJobService } from "$lib/api/savedJob.service";
+	import { showToast } from "$lib/stores/toast";
 
-	$: benefitsList = job?.benefits
-		? job.benefits
-				.split(",")
-				.map((b) => b.trim())
-				.filter((b) => b)
-		: [];
+	let { job = null, modalId = "job-detail-modal", loading = false, isApplied = false } = $props();
+
+	let applying = $state(false);
+	let isSaved = $state(false);
+	let saving = $state(false);
+
+	$effect(() => {
+		if (job?.id && $auth.isAuthenticated) {
+			savedJobService.isJobSaved(job.id).then((saved) => (isSaved = saved));
+		} else {
+			isSaved = false;
+		}
+	});
+
+	async function toggleSave() {
+		if (!job?.id || saving) return;
+		saving = true;
+		try {
+			if (isSaved) {
+				await savedJobService.unsaveJob(job.id);
+				isSaved = false;
+				showToast("Job removed from saved", "info");
+			} else {
+				await savedJobService.saveJob(job.id);
+				isSaved = true;
+				showToast("Job saved!", "success");
+			}
+		} catch (e) {
+			showToast("Failed to update saved status", "error");
+		} finally {
+			saving = false;
+		}
+	}
+
+	let requirementsList = $derived(
+		job?.requirements
+			? job.requirements
+					.split(",")
+					.map((r) => r.trim())
+					.filter((r) => r)
+			: []
+	);
+
+	let benefitsList = $derived(
+		job?.benefits
+			? job.benefits
+					.split(",")
+					.map((b) => b.trim())
+					.filter((b) => b)
+			: []
+	);
+
+	async function handleApply() {
+		if (!job?.id || applying) return;
+
+		applying = true;
+		try {
+			// Check if user has a CV before applying
+			const currentCV = await cvService.getCurrentCV();
+			if (!currentCV) {
+				showToast("Please upload your CV before applying", "warning");
+				goto("/profile");
+				return;
+			}
+
+			const response = await jobService.applyForJob(job.id);
+			if (response?.application_id) {
+				showToast("Successfully applied! Take the quiz to proceed.", "success");
+				if (response?.quiz_id) {
+					goto(`/quizzes/${response.quiz_id}`);
+					return;
+				}
+				goto("/applications");
+			} else {
+				showToast("Unexpected response from server", "error");
+				goto("/applications");
+				return;
+			}
+		} catch (error) {
+			const message = error.message || "Failed to apply for the job";
+
+			if (message.toLowerCase().includes("already applied")) {
+				showToast(message, "warning");
+				goto("/applications");
+			} else if (message.toLowerCase().includes("cv")) {
+				showToast("Please upload your CV before applying", "warning");
+				goto("/profile");
+			} else {
+				showToast(message, "error");
+				goto("/applications");
+			}
+		} finally {
+			applying = false;
+		}
+	}
 </script>
 
 <input type="checkbox" id={modalId} class="modal-toggle" />
@@ -57,7 +141,23 @@
 										class="loading loading-spinner loading-xs text-indigo-600"
 									></span>
 								{:else}
-									<Bookmark class="h-5 w-5 text-indigo-600" />
+									<button
+										onclick={toggleSave}
+										disabled={saving}
+										class="cursor-pointer"
+									>
+										{#if saving}
+											<span
+												class="loading loading-spinner loading-xs text-indigo-600"
+											></span>
+										{:else}
+											<Bookmark
+												class="h-5 w-5 {isSaved
+													? 'text-indigo-600 fill-indigo-600'
+													: 'text-indigo-600'}"
+											/>
+										{/if}
+									</button>
 								{/if}
 							</h2>
 							<p
@@ -239,19 +339,13 @@
         pb-6 sm:px-8
       "
 			>
-				{#if $auth.isAuthenticated}
-					<button
-						class="
-						btn h-12 w-full rounded-lg
-						border border-indigo-600/90 bg-indigo-600 text-white
-						text-lg font-semibold
-						transition-all duration-300 sm:h-13 hover:bg-indigo-700
-					"
+				{#if isApplied}
+					<div
+						class="btn h-12 w-full cursor-default rounded-lg border border-sky-200 bg-sky-50 text-lg font-semibold text-sky-600 sm:h-13"
 					>
-						Apply Now
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
-							class="ml-2 h-5 w-5"
+							class="h-5 w-5"
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
@@ -260,13 +354,47 @@
 								stroke-linecap="round"
 								stroke-linejoin="round"
 								stroke-width="2"
-								d="M13 7l5 5m0 0l-5 5m5-5H6"
+								d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
 							/>
 						</svg>
+						You have Applied
+					</div>
+				{:else if $auth.isAuthenticated}
+					<button
+						onclick={handleApply}
+						disabled={applying}
+						class="
+						btn h-12 w-full rounded-lg
+						border border-indigo-600/90 bg-indigo-600 text-white
+						text-lg font-semibold
+						transition-all duration-300 sm:h-13 hover:bg-indigo-700
+						{applying ? 'pointer-events-none opacity-60' : ''}
+					"
+					>
+						{#if applying}
+							<span class="loading loading-spinner loading-sm"></span>
+							Applying...
+						{:else}
+							Apply Now
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="ml-2 h-5 w-5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M13 7l5 5m0 0l-5 5m5-5H6"
+								/>
+							</svg>
+						{/if}
 					</button>
 				{:else}
 					<button
-						on:click={() => auth.loginWithGithub()}
+						onclick={() => auth.loginWithGithub()}
 						class="
 						btn h-12 w-full rounded-lg
 						border border-indigo-600/90

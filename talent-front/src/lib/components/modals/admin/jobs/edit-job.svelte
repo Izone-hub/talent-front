@@ -23,7 +23,8 @@
         remote_possible: false,
         salary_min: null,
         salary_max: null,
-        salary_currency: "USD",
+        salary_currency: "ETB",
+        status: "draft",
         expires_at: "",
     };
 
@@ -44,7 +45,8 @@
             remote_possible: !!job.remote_possible,
             salary_min: job.salary_min || null,
             salary_max: job.salary_max || null,
-            salary_currency: job.salary_currency || "USD",
+            salary_currency: job.salary_currency || "ETB",
+            status: job.status || "draft",
             expires_at: job.expires_at ? job.expires_at.substring(0, 10) : "",
         };
     }
@@ -53,7 +55,8 @@
         dispatch("close");
     }
 
-    function submit() {
+    function submit(e) {
+        e.preventDefault();
         const payload = { ...jobData };
         if (!payload.company_logo) payload.company_logo = null;
         if (!payload.company_website) payload.company_website = null;
@@ -76,9 +79,8 @@
             payload.salary_max = parseInt(payload.salary_max, 10);
         else payload.salary_max = null;
 
-        if (!payload.salary_currency) payload.salary_currency = "USD";
-
-        payload.status = "draft";
+        if (!payload.salary_currency) payload.salary_currency = "ETB";
+        if (!payload.status) payload.status = "draft";
 
         dispatch("submit", { id: job.id, data: payload });
     }
@@ -101,7 +103,7 @@
                 </p>
                 <button
                     class="absolute top-8 right-8 text-white/80 hover:text-white transition-transform hover:rotate-90"
-                    on:click={close}
+                    onclick={close}
                     type="button"
                     aria-label="Close modal"
                 >
@@ -113,7 +115,7 @@
             <div
                 class="p-8 max-h-[75vh] overflow-y-auto custom-scrollbar text-gray-700 bg-white"
             >
-                <form on:submit|preventDefault={submit} class="space-y-8">
+                <form onsubmit={submit} class="space-y-8">
                     <!-- Section: Basic Job Info -->
                     <div>
                         <h4
@@ -399,9 +401,24 @@
                                         bind:value={jobData.salary_currency}
                                     >
                                         <option value="USD">USD</option>
-                                        <option value="ETB">ETB</option>
+                                        <option value="ETB">ETB (Birr)</option>
                                         <option value="EUR">EUR</option>
                                         <option value="GBP">GBP</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label
+                                        class="text-sm font-semibold text-gray-600"
+                                        for="status">Status</label
+                                    >
+                                    <select
+                                        id="status"
+                                        class="select select-sm select-ghost font-bold text-purple-600 focus:ring-0"
+                                        bind:value={jobData.status}
+                                    >
+                                        <option value="draft">Draft</option>
+                                        <option value="published">Open</option>
+                                        <option value="closed">Closed</option>
                                     </select>
                                 </div>
                             </div>
@@ -443,14 +460,14 @@
                 <button
                     type="button"
                     class="btn btn-ghost rounded-lg px-6 font-bold text-gray-500 hover:bg-gray-100"
-                    on:click={close}
+                    onclick={close}
                 >
                     Cancel
                 </button>
                 <button
-                    type="submit"
+                    type="button"
                     class="btn btn-primary bg-purple-600 hover:bg-purple-700 border-none px-10 rounded-lg shadow-lg shadow-purple-100 font-bold"
-                    on:click={submit}
+                    onclick={submit}
                 >
                     Save Changes
                 </button>
