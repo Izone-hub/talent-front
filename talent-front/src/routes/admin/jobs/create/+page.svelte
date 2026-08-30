@@ -18,17 +18,21 @@
         Calendar,
         Zap,
         ArrowLeft as BackIcon,
+        Plus,
+        Trash2,
     } from "lucide-svelte";
     import { jobService } from "$lib/api/job.service";
     import { jobDescriptionService } from "$lib/api/jobDescription.service";
+    import { tagService } from "$lib/api/tag.service";
+    import { surveyService } from "$lib/api/survey.service";
     import { showToast } from "$lib/stores/toast";
-    import { companySettings } from "$lib/stores/companySettings";
+    import { settingsService } from "$lib/api/settings.service";
 
     let currentStep = $state(1);
-    const totalSteps = 5;
+    const totalSteps = 6;
 
     const validCategories = ['full_stack_developer', 'web_developer', 'frontend_developer', 'backend_developer', 'system_architect', 'mobile_developer'];
-    let initialCategory = 'full_stack_developer';
+    let initialCategory = '';
     if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const cat = params.get('category');
@@ -62,6 +66,53 @@
     let requirementTags = $state([]);
     let newTagInput = $state("");
     let selectedBenefits = $state([]);
+
+    let allTags = $state([]);
+    let tagSearch = $state("");
+    let tagLoading = $state(true);
+
+    async function loadTags() {
+        tagLoading = true;
+        try {
+            const data = await tagService.listTags();
+            allTags = data || [];
+        } catch (error) {
+            console.error("Failed to load tags:", error);
+            allTags = [];
+        } finally {
+            tagLoading = false;
+        }
+    }
+
+    $effect(() => {
+        loadTags();
+    });
+
+    function tagName(tag) {
+        return (tag && (tag.name || tag.Name)) || "";
+    }
+
+    function tagColor(name) {
+        const match = allTags.find(
+            (t) => (t.name || t.Name)?.toLowerCase() === name.toLowerCase(),
+        );
+        return (match && (match.color || match.Color)) || "#7C3AED";
+    }
+
+    function getSuggestedTags() {
+        const lower = requirementTags.map((t) => t.toLowerCase());
+        return allTags.filter(
+            (t) => !lower.includes(tagName(t).toLowerCase()),
+        );
+    }
+
+    function filteredTags() {
+        const q = tagSearch.trim().toLowerCase();
+        return getSuggestedTags().filter((t) => {
+            const name = tagName(t);
+            return !q || name.toLowerCase().includes(q);
+        });
+    }
 
     const benefitOptions = [
         { id: "health", label: "Health Insurance", icon: Heart },
@@ -105,6 +156,21 @@
 
     let stepErrors = $state({});
     let enhancing = $state(false);
+    let salaryLocked = $state(true);
+
+    // Survey screening questions (simple Yes/No)
+    let surveyQuestions = $state([]);
+
+    function addSurveyQuestion() {
+        surveyQuestions = [...surveyQuestions, {
+            question_text: "",
+            expected_answer: true,
+        }];
+    }
+
+    function removeSurveyQuestion(index) {
+        surveyQuestions = surveyQuestions.filter((_, i) => i !== index);
+    }
 
     const categoryData = {
         full_stack_developer: {
@@ -142,10 +208,22 @@
         }
         const reqData = categoryRequirements[catValue];
         if (reqData) {
-            requirementTags = [...reqData.tags];
-            jobData.requirements = reqData.tags.join("\n");
+            requirementTags = [];
+            const tagNameSet = new Set(
+                allTags.map((t) => (t.name || t.Name || "").toLowerCase()),
+            );
+            const matched = reqData.tags.filter((t) =>
+                tagNameSet.has(t.toLowerCase()),
+            );
+            requirementTags = matched.length > 0 ? matched : [...reqData.tags];
+            jobData.requirements = requirementTags.join("\n");
             jobData.responsibilities = reqData.responsibilities;
             currentSuggestedTags = reqData.tags;
+        }
+        // Auto-advance to next step
+        if (currentStep === 1 && currentStep < totalSteps) {
+            currentStep++;
+            stepErrors = {};
         }
     }
 
@@ -183,9 +261,11 @@
                 if (parsed.location) jobData.location = parsed.location;
                 if (typeof parsed.remote_possible === "boolean")
                     jobData.remote_possible = parsed.remote_possible;
-                if (parsed.salary_min) jobData.salary_min = parsed.salary_min;
-                if (parsed.salary_max) jobData.salary_max = parsed.salary_max;
-                if (parsed.salary_currency) jobData.salary_currency = parsed.salary_currency;
+                if (!salaryLocked) {
+                    if (parsed.salary_min) jobData.salary_min = parsed.salary_min;
+                    if (parsed.salary_max) jobData.salary_max = parsed.salary_max;
+                    if (parsed.salary_currency) jobData.salary_currency = parsed.salary_currency;
+                }
             }
             showAiPrompt = false;
             aiPrompt = "";
@@ -216,11 +296,14 @@
                 job_type: jobData.job_type,
                 category: jobData.category,
                 experience_level: jobData.experience_level,
-                salary_min: jobData.salary_min,
-                salary_max: jobData.salary_max,
-                salary_currency: jobData.salary_currency,
                 remote_possible: jobData.remote_possible,
             };
+            // Only include salary if not locked
+            if (!salaryLocked) {
+                payload.salary_min = jobData.salary_min;
+                payload.salary_max = jobData.salary_max;
+                payload.salary_currency = jobData.salary_currency;
+            }
 
             const data = await jobDescriptionService.enhanceJobPost(payload);
             const parsed = data.response || data.job_description;
@@ -255,9 +338,11 @@
                 if (raw.job_type) jobData.job_type = raw.job_type;
                 if (raw.experience_level) jobData.experience_level = raw.experience_level;
                 if (typeof raw.remote_possible === "boolean") jobData.remote_possible = raw.remote_possible;
-                if (raw.salary_min) jobData.salary_min = raw.salary_min;
-                if (raw.salary_max) jobData.salary_max = raw.salary_max;
-                if (raw.salary_currency) jobData.salary_currency = raw.salary_currency;
+                if (!salaryLocked) {
+                    if (raw.salary_min) jobData.salary_min = raw.salary_min;
+                    if (raw.salary_max) jobData.salary_max = raw.salary_max;
+                    if (raw.salary_currency) jobData.salary_currency = raw.salary_currency;
+                }
                 showToast("Job posting enhanced with AI", "success");
             } else {
                 showToast("AI returned unexpected format", "error");
@@ -271,14 +356,16 @@
 
     function addTag(text) {
         const trimmed = text.trim();
-        if (trimmed && !requirementTags.includes(trimmed)) {
+        if (trimmed && !requirementTags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
             requirementTags = [...requirementTags, trimmed];
             syncRequirements();
         }
     }
 
     function removeTag(text) {
-        requirementTags = requirementTags.filter((t) => t !== text);
+        requirementTags = requirementTags.filter(
+            (t) => t.toLowerCase() !== text.toLowerCase(),
+        );
         syncRequirements();
     }
 
@@ -365,8 +452,11 @@
         submitting = true;
         try {
             let settings = {};
-            const unsub = companySettings.subscribe((v) => (settings = v));
-            unsub();
+            try {
+                settings = await settingsService.getCompanySettings();
+            } catch (err) {
+                console.error('Failed to load company settings:', err);
+            }
 
             const payload = { ...jobData };
             payload.company = settings.company_name || "";
@@ -395,7 +485,17 @@
 
             payload.status = "draft";
 
-            await jobService.createJob(payload);
+            const createdJob = await jobService.createJob(payload);
+
+            // Save survey questions separately if any exist
+            const validQuestions = surveyQuestions.filter(q => q.question_text.trim());
+            if (validQuestions.length > 0 && createdJob?.id) {
+                await surveyService.upsertQuestions(createdJob.id, validQuestions.map((q, i) => ({
+                    question_text: q.question_text,
+                    expected_answer: q.expected_answer,
+                })));
+            }
+
             showToast("Job created successfully!", "success");
             goto("/admin/jobs");
         } catch (error) {
@@ -405,7 +505,7 @@
         }
     }
 
-    const stepLabels = ["Category", "Job Details", "Requirements", "Compensation", "Publishing"];
+    const stepLabels = ["Category", "Job Details", "Requirements", "Survey", "Compensation", "Publishing"];
 </script>
 
 <svelte:head>
@@ -628,7 +728,10 @@
                                 <div class="border-2 border-dashed border-slate-200 rounded-xl p-3 bg-slate-50 focus-within:border-purple-500 focus-within:bg-white transition-all">
                                     <div class="flex flex-wrap gap-2 items-center min-h-[44px]">
                                         {#each requirementTags as tag}
-                                            <span class="inline-flex items-center gap-1.5 bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-medium animate-popIn">
+                                            <span
+                                                class="inline-flex items-center gap-1.5 text-white rounded-full px-3 py-1 text-xs font-medium animate-popIn"
+                                                style="background-color: {tagColor(tag)}"
+                                            >
                                                 {tag}
                                                 <button
                                                     type="button"
@@ -656,18 +759,70 @@
                                 <p class="text-xs text-slate-400">
                                     Press <kbd class="kbd kbd-xs">Enter</kbd> to add each requirement as a tag
                                 </p>
-                                <!-- Suggestions -->
-                                <div class="flex flex-wrap gap-1.5 mt-1">
-                                    {#each currentSuggestedTags as sTag}
-                                        <button
-                                            type="button"
-                                            class="px-2.5 py-0.5 bg-slate-100 hover:bg-purple-600 hover:text-white rounded-full text-[11px] text-slate-500 transition-all border border-transparent hover:border-purple-400 hover:-translate-y-0.5"
-                                            onclick={() => addTag(sTag)}
-                                        >
-                                            + {sTag}
-                                        </button>
-                                    {/each}
+                                <!-- Tag picker from tags database -->
+                                <div class="mt-3 border border-slate-200 rounded-xl overflow-hidden">
+                                    <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+                                        <p class="text-xs font-semibold text-slate-600">
+                                            Select from existing tags
+                                        </p>
+                                        {#if tagLoading}
+                                            <span class="loading loading-spinner loading-xs text-purple-600"></span>
+                                        {/if}
+                                    </div>
+                                    {#if !tagLoading}
+                                        <div class="p-2">
+                                            <input
+                                                type="text"
+                                                class="input input-sm w-full bg-white border-slate-200 focus:border-purple-500 rounded-lg text-xs mb-2"
+                                                placeholder="Search tags..."
+                                                bind:value={tagSearch}
+                                            />
+                                            {#if filteredTags().length === 0}
+                                                <p class="text-xs text-slate-400 text-center py-4">
+                                                    No available tags match.
+                                                </p>
+                                            {:else}
+                                                <div class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                                                    {#each filteredTags() as sTag}
+                                                        {@const sName = tagName(sTag)}
+                                                        {@const sColor = tagColor(sName)}
+                                                        <button
+                                                            type="button"
+                                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] transition-all border border-transparent hover:-translate-y-0.5"
+                                                            style="background-color: {sColor}1A; color: {sColor}; border-color: {sColor}40"
+                                                            onclick={() => addTag(sName)}
+                                                        >
+                                                            <span
+                                                                class="w-2 h-2 rounded-full inline-block"
+                                                                style="background-color: {sColor}"
+                                                            ></span>
+                                                            + {sName}
+                                                        </button>
+                                                    {/each}
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    {/if}
                                 </div>
+                                <!-- Category suggestions -->
+                                {#if currentSuggestedTags.length > 0}
+                                    <div class="mt-2">
+                                        <p class="text-[11px] font-medium text-slate-400 mb-1">
+                                            Category suggestions
+                                        </p>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            {#each currentSuggestedTags as sTag}
+                                                <button
+                                                    type="button"
+                                                    class="px-2.5 py-0.5 bg-slate-100 hover:bg-purple-600 hover:text-white rounded-full text-[11px] text-slate-500 transition-all border border-transparent hover:border-purple-400 hover:-translate-y-0.5"
+                                                    onclick={() => addTag(sTag)}
+                                                >
+                                                    + {sTag}
+                                                </button>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
                             </div>
 
                             <!-- Responsibilities -->
@@ -718,8 +873,88 @@
                     </div>
                 {/if}
 
-                <!-- Step 4: Compensation -->
+                <!-- Step 4: Survey Screening Questions -->
                 {#if currentStep === 4}
+                    <div class="animate-fadeIn">
+                        <h4 class="text-lg font-bold text-slate-900 mb-1">Screening Questions</h4>
+                        <p class="text-sm text-slate-500 mb-6">
+                            Simple Yes/No questions before candidates can apply (optional)
+                        </p>
+
+                        <div class="space-y-4">
+                            {#each surveyQuestions as q, qi}
+                                <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 group hover:border-purple-300 transition-all">
+                                    <!-- Question number -->
+                                    <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center text-sm font-bold shrink-0">
+                                        {qi + 1}
+                                    </div>
+
+                                    <!-- Question input -->
+                                    <input
+                                        type="text"
+                                        class="flex-1 bg-white border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 rounded-lg px-3 py-2 text-sm font-medium outline-none transition-all"
+                                        placeholder="e.g., Do you live in Hawassa?"
+                                        bind:value={surveyQuestions[qi].question_text}
+                                    />
+
+                                    <!-- Expected answer toggle -->
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <span class="text-xs text-slate-400 font-medium">Expected:</span>
+                                        <button
+                                            type="button"
+                                            class="relative w-14 h-7 rounded-full transition-all cursor-pointer
+                                            {surveyQuestions[qi].expected_answer
+                                                ? 'bg-emerald-500'
+                                                : 'bg-rose-400'}"
+                                            onclick={() => {
+                                                surveyQuestions[qi].expected_answer = !surveyQuestions[qi].expected_answer;
+                                                surveyQuestions = [...surveyQuestions];
+                                            }}
+                                        >
+                                            <span class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform
+                                                {surveyQuestions[qi].expected_answer ? 'translate-x-7' : ''}"></span>
+                                            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                                                {surveyQuestions[qi].expected_answer ? 'Yes' : 'No'}
+                                            </span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Remove -->
+                                    <button
+                                        type="button"
+                                        class="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all shrink-0"
+                                        onclick={() => removeSurveyQuestion(qi)}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            {/each}
+
+                            <!-- Add Question Button -->
+                            <button
+                                type="button"
+                                class="w-full border-2 border-dashed border-slate-200 rounded-xl py-4 flex items-center justify-center gap-2 text-slate-400 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50/30 transition-all cursor-pointer"
+                                onclick={addSurveyQuestion}
+                            >
+                                <Plus size={18} />
+                                <span class="text-sm font-semibold">Add Screening Question</span>
+                            </button>
+
+                            {#if surveyQuestions.length === 0}
+                                <p class="text-xs text-slate-400 text-center">
+                                    No screening questions. Candidates can apply directly.
+                                </p>
+                            {:else}
+                                <p class="text-xs text-slate-400 text-center">
+                                    {surveyQuestions.length} screening question{surveyQuestions.length !== 1 ? 's' : ''} — candidates must answer Yes to proceed
+                                </p>
+                            {/if}
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- Step 5: Compensation -->
+                {#if currentStep === 5}
                     <div class="animate-fadeIn">
                         <h4 class="text-lg font-bold text-slate-900 mb-1">Compensation</h4>
                         <p class="text-sm text-slate-500 mb-6">
@@ -727,6 +962,36 @@
                         </p>
 
                         <div class="space-y-6">
+                            <!-- Salary Lock Toggle -->
+                            <div
+                                class="flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all
+                                {salaryLocked ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white hover:border-purple-300'}"
+                                onclick={() => salaryLocked = !salaryLocked}
+                                role="button"
+                                tabindex="0"
+                                onkeydown={(e) => e.key === 'Enter' && (salaryLocked = !salaryLocked)}
+                            >
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors
+                                        {salaryLocked ? 'bg-amber-100' : 'bg-slate-100'}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {salaryLocked ? 'text-amber-600' : 'text-slate-400'}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold {salaryLocked ? 'text-amber-800' : 'text-slate-700'}">
+                                            {salaryLocked ? 'Salary Locked' : 'Salary Unlocked'}
+                                        </p>
+                                        <p class="text-xs {salaryLocked ? 'text-amber-600' : 'text-slate-400'}">
+                                            {salaryLocked ? 'AI will not modify salary fields' : 'AI may adjust salary during enhancement'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="relative w-12 h-6 rounded-full transition-colors
+                                    {salaryLocked ? 'bg-amber-500' : 'bg-slate-300'}">
+                                    <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform
+                                        {salaryLocked ? 'translate-x-6' : ''}"></div>
+                                </div>
+                            </div>
+
                             <!-- Salary Range -->
                             <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5">
                                 <div class="flex items-center justify-between mb-4">
@@ -823,8 +1088,8 @@
                     </div>
                 {/if}
 
-                <!-- Step 5: Publishing -->
-                {#if currentStep === 5}
+                <!-- Step 6: Publishing -->
+                {#if currentStep === 6}
                     <div class="animate-fadeIn">
                         <h4 class="text-lg font-bold text-slate-900 mb-1">Publishing</h4>
                         <p class="text-sm text-slate-500 mb-6">
@@ -1003,5 +1268,19 @@
             transform: scale(1);
             opacity: 1;
         }
+    }
+
+    :global(.custom-scrollbar)::-webkit-scrollbar {
+        width: 6px;
+    }
+    :global(.custom-scrollbar)::-webkit-scrollbar-track {
+        background: #f8fafc;
+    }
+    :global(.custom-scrollbar)::-webkit-scrollbar-thumb {
+        background: #e2e8f0;
+        border-radius: 10px;
+    }
+    :global(.custom-scrollbar)::-webkit-scrollbar-thumb:hover {
+        background: #cbd5e1;
     }
 </style>

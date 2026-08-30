@@ -1,10 +1,11 @@
 <script>
-	import { Bookmark } from "@lucide/svelte";
+	import { Bookmark, AlertCircle, CheckCircle, HelpCircle } from "@lucide/svelte";
 	import { goto } from "$app/navigation";
 	import { auth } from "$lib/stores/authStore";
 	import { jobService } from "$lib/api/job.service";
 	import { cvService } from "$lib/api/cv.service";
 	import { savedJobService } from "$lib/api/savedJob.service";
+	import { surveyService } from "$lib/api/survey.service";
 	import { showToast } from "$lib/stores/toast";
 
 	let { job = null, modalId = "job-detail-modal", loading = false, isApplied = false } = $props();
@@ -13,11 +14,33 @@
 	let isSaved = $state(false);
 	let saving = $state(false);
 
+	// Survey screening state
+	let surveyQuestions = $state([]);
+	let surveyAnswers = $state({});
+	let showSurvey = $state(false);
+	let surveyLoading = $state(false);
+	let surveyResult = $state(null);
+	let currentQuestionIndex = $state(0);
+
 	$effect(() => {
 		if (job?.id && $auth.isAuthenticated) {
 			savedJobService.isJobSaved(job.id).then((saved) => (isSaved = saved));
+			// Fetch survey questions for this job
+			surveyService.getQuestions(job.id).then((res) => {
+				const qs = res?.questions || [];
+				surveyQuestions = qs;
+				// Initialize answers
+				const init = {};
+				for (const q of qs) {
+					init[q.id] = null; // unanswered
+				}
+				surveyAnswers = init;
+			}).catch(() => {
+				surveyQuestions = [];
+			});
 		} else {
 			isSaved = false;
+			surveyQuestions = [];
 		}
 	});
 
@@ -59,8 +82,25 @@
 			: []
 	);
 
+	function timeAgo(dateStr) {
+		if (!dateStr) return "recently";
+		const diffDays = Math.floor((new Date() - new Date(dateStr)) / (1000 * 60 * 60 * 24));
+		if (diffDays === 0) return "today";
+		if (diffDays === 1) return "yesterday";
+		if (diffDays < 7) return `${diffDays} days ago`;
+		if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+		return `${Math.floor(diffDays / 30)} months ago`;
+	}
+
 	async function handleApply() {
 		if (!job?.id || applying) return;
+
+		// If there are survey questions, show them first
+		if (surveyQuestions.length > 0 && !showSurvey) {
+			showSurvey = true;
+			surveyResult = null;
+			return;
+		}
 
 		applying = true;
 		try {
@@ -75,6 +115,7 @@
 			const response = await jobService.applyForJob(job.id);
 			if (response?.application_id) {
 				showToast("Successfully applied! Take the quiz to proceed.", "success");
+				showSurvey = false;
 				if (response?.quiz_id) {
 					goto(`/quizzes/${response.quiz_id}`);
 					return;
@@ -101,6 +142,77 @@
 		} finally {
 			applying = false;
 		}
+	}
+
+	function startSurvey() {
+		showSurvey = true;
+		surveyResult = null;
+		currentQuestionIndex = 0;
+	}
+
+	function answerQuestion(questionId, answer) {
+		surveyAnswers[questionId] = answer;
+		surveyAnswers = { ...surveyAnswers };
+	}
+
+	function nextQuestion() {
+		if (currentQuestionIndex < surveyQuestions.length - 1) {
+			currentQuestionIndex++;
+		} else {
+			submitSurvey();
+		}
+	}
+
+	function prevQuestion() {
+		if (currentQuestionIndex > 0) {
+			currentQuestionIndex--;
+		}
+	}
+
+	async function submitSurvey() {
+		surveyLoading = true;
+		try {
+			const result = await surveyService.submitAnswers(job.id, surveyAnswers);
+			surveyResult = result;
+
+			if (result.passed) {
+				showToast("You passed the screening! Applying now...", "success");
+				autoApply();
+			} else {
+				showToast("Sorry, you did not pass the screening questions.", "error");
+			}
+		} catch (error) {
+			showToast(error.message || "Failed to submit answers", "error");
+		} finally {
+			surveyLoading = false;
+		}
+	}
+
+	async function autoApply() {
+		try {
+			const currentCV = await cvService.getCurrentCV();
+			if (!currentCV) {
+				showToast("Please upload your CV before applying", "warning");
+				goto("/profile");
+				return;
+			}
+			const response = await jobService.applyForJob(job.id);
+			if (response?.application_id) {
+				showToast("Successfully applied! Taking you to your applications.", "success");
+				setTimeout(() => {
+					showSurvey = false;
+					goto("/applications");
+				}, 1200);
+			}
+		} catch (error) {
+			showToast(error.message || "Failed to apply", "error");
+		}
+	}
+
+	function closeSurvey() {
+		showSurvey = false;
+		surveyResult = null;
+		currentQuestionIndex = 0;
 	}
 </script>
 
@@ -255,6 +367,25 @@
 						>
 						{job.experience_level || "Not specified"}
 					</div>
+					{#if job.published_at}
+					<div
+						class="badge gap-1.5 badge-outline border-indigo-100/60 bg-indigo-50/30 px-3 py-3 text-sm font-medium text-indigo-700"
+					>
+						<svg
+							class="h-4 w-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							><path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+							/></svg
+						>
+						Posted {timeAgo(job.published_at)}
+					</div>
+					{/if}
 				</div>
 
 				<!-- Description -->
@@ -430,5 +561,177 @@
 		{/if}
 	</div>
 
+	<!-- ─── Survey Screening Modal (centered) ─── -->
+	{#if showSurvey}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="fixed inset-0 z-[999] flex items-center justify-center p-4" onclick={closeSurvey}>
+			<div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+			<div
+				class="relative w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden animate-fadeIn"
+				onclick={(e) => e.stopPropagation()}
+			>
+
+				{#if surveyResult}
+					<!-- ── RESULT SCREEN ── -->
+					<div class="flex flex-col items-center px-8 py-10 text-center">
+						{#if surveyResult.passed}
+							<!-- PASSED -->
+							<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-500 shadow-lg shadow-emerald-200">
+								<CheckCircle size={40} class="text-white" />
+							</div>
+							<h4 class="mt-5 text-xl font-bold text-slate-900">You Passed! 🎉</h4>
+							<p class="mt-2 text-sm leading-relaxed text-slate-500">Applying to this job now...</p>
+							<div class="mt-4">
+								<span class="loading loading-spinner loading-md text-emerald-600"></span>
+							</div>
+						{:else}
+							<!-- FAILED -->
+							<div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-red-500 shadow-lg shadow-rose-200">
+								<AlertCircle size={40} class="text-white" />
+							</div>
+							<h4 class="mt-5 text-xl font-bold text-slate-900">Screening Not Passed</h4>
+							<p class="mt-2 text-sm leading-relaxed text-slate-500">You did not meet the screening requirements for this job.</p>
+
+							<!-- Failed questions -->
+							<div class="mt-6 w-full space-y-2.5">
+								{#each surveyResult.results as r}
+									<div class="flex items-center gap-3 rounded-xl border px-4 py-3 text-left {r.passed ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}">
+										{#if r.passed}
+										<CheckCircle size={16} class="shrink-0 text-emerald-500" />
+									{:else}
+										<AlertCircle size={16} class="shrink-0 text-rose-500" />
+									{/if}
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm font-medium text-slate-700">{r.question_text}</p>
+										<p class="text-xs text-slate-400">Your answer: {r.your_answer ? 'Yes' : 'No'} · Expected: {r.expected ? 'Yes' : 'No'}</p>
+									</div>
+								</div>
+								{/each}
+							</div>
+
+							<button
+								onclick={closeSurvey}
+								class="mt-6 w-full rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+							>
+								Close
+							</button>
+						{/if}
+					</div>
+
+				{:else}
+					<!-- ── QUESTION SCREEN ── -->
+					{@const q = surveyQuestions[currentQuestionIndex]}
+					{@const total = surveyQuestions.length}
+					{@const current = currentQuestionIndex + 1}
+
+					<!-- Header -->
+					<div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2">
+								<HelpCircle size={18} class="text-white/80" />
+								<span class="text-sm font-semibold text-white/90">Screening</span>
+							</div>
+							<button
+								onclick={closeSurvey}
+								class="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+							</button>
+						</div>
+						<!-- Progress -->
+						<div class="mt-3">
+							<div class="flex items-center justify-between text-xs text-white/70 mb-1.5">
+								<span>Question {current} of {total}</span>
+								<span>{Math.round((current / total) * 100)}%</span>
+							</div>
+							<div class="h-1.5 w-full rounded-full bg-white/20">
+								<div class="h-full rounded-full bg-white transition-all duration-300" style="width: {(current / total) * 100}%"></div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Question body -->
+					<div class="px-6 py-6">
+						<p class="text-base font-semibold leading-relaxed text-slate-800">{q.question_text}</p>
+
+						<div class="mt-5 space-y-3">
+							<button
+								onclick={() => answerQuestion(q.id, true)}
+								class="flex w-full items-center justify-center gap-2.5 rounded-2xl border-2 py-4 text-base font-bold transition-all duration-200
+								{surveyAnswers[q.id] === true
+									? 'border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-200 scale-[1.02]'
+									: 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700'}"
+							>
+								<span class="flex h-7 w-7 items-center justify-center rounded-full border-2 {surveyAnswers[q.id] === true ? 'border-white bg-white/20' : 'border-slate-300'}">
+									{#if surveyAnswers[q.id] === true}
+										<CheckCircle size={14} class="text-white" />
+									{/if}
+								</span>
+								Yes
+							</button>
+
+							<button
+								onclick={() => answerQuestion(q.id, false)}
+								class="flex w-full items-center justify-center gap-2.5 rounded-2xl border-2 py-4 text-base font-bold transition-all duration-200
+								{surveyAnswers[q.id] === false
+									? 'border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200 scale-[1.02]'
+									: 'border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700'}"
+							>
+								<span class="flex h-7 w-7 items-center justify-center rounded-full border-2 {surveyAnswers[q.id] === false ? 'border-white bg-white/20' : 'border-slate-300'}">
+									{#if surveyAnswers[q.id] === false}
+										<AlertCircle size={14} class="text-white" />
+									{/if}
+								</span>
+								No
+							</button>
+						</div>
+				</div>
+
+				<!-- Footer -->
+				<div class="border-t border-slate-100 bg-slate-50 px-6 py-4">
+					<div class="flex items-center gap-3">
+						{#if currentQuestionIndex > 0}
+							<button
+								onclick={prevQuestion}
+								class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+							>
+								Back
+							</button>
+						{/if}
+						<button
+								onclick={nextQuestion}
+								disabled={surveyAnswers[q.id] === null || surveyLoading}
+								class="ml-auto rounded-xl px-6 py-2.5 text-sm font-bold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40
+								{surveyAnswers[q.id] !== null
+									? 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200'
+									: 'bg-slate-300'}"
+							>
+								{#if surveyLoading}
+									<span class="loading loading-spinner loading-xs"></span>
+									Submitting...
+								{:else if currentQuestionIndex === total - 1}
+									Submit & Apply
+								{:else}
+									Next →
+								{/if}
+							</button>
+					</div>
+				</div>
+			{/if}
+		</div>
+	</div>
+	{/if}
+
 	<label class="modal-backdrop" for={modalId}></label>
 </div>
+
+<style>
+	@keyframes fadeIn {
+		from { opacity: 0; transform: scale(0.95) translateY(10px); }
+		to { opacity: 1; transform: scale(1) translateY(0); }
+	}
+	:global(.animate-fadeIn) {
+		animation: fadeIn 0.3s ease-out;
+	}
+</style>
