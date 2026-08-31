@@ -20,6 +20,7 @@
     import { tagService } from "$lib/api/tag.service";
     import { questionGenerationService } from "$lib/api/questionGeneration.service";
     import { showToast } from "$lib/stores/toast";
+    import CodeEditor from "$lib/components/ui/CodeEditor.svelte";
 
     export let isOpen = false;
 
@@ -679,17 +680,14 @@
                                             ? "Starter SQL (shown to the candidate)"
                                             : "Code Template"}</label
                                     >
-                                    <textarea
-                                        id="code_template"
-                                        bind:value={
-                                            questionData.coding_details
-                                                .code_template
-                                        }
-                                        class="textarea textarea-bordered w-full h-48 bg-slate-900 text-slate-100 font-mono text-sm leading-relaxed rounded-2xl"
+                                    <CodeEditor
+                                        bind:value={questionData.coding_details.code_template}
+                                        language={questionData.coding_details.language || 'python'}
+                                        height="14rem"
                                         placeholder={isSqlQuestion
                                             ? "-- Write your SQL here"
                                             : "func solution(n int) int ..."}
-                                    ></textarea>
+                                    />
                                 </div>
 
                                 {#if isSqlQuestion}

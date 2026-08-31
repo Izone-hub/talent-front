@@ -54,7 +54,7 @@
         remote_possible: false,
         salary_min: null,
         salary_max: null,
-        salary_currency: "USD",
+        salary_currency: "ETB",
         expires_at: "",
     });
 
@@ -481,11 +481,21 @@
                 payload.salary_max = parseInt(payload.salary_max, 10);
             else payload.salary_max = null;
 
-            if (!payload.salary_currency) payload.salary_currency = "USD";
+            if (!payload.salary_currency) payload.salary_currency = "ETB";
 
             payload.status = "draft";
 
             const createdJob = await jobService.createJob(payload);
+
+            // Assign selected tags to the created job
+            if (createdJob?.id && requirementTags.length > 0) {
+                try {
+                    await tagService.assignTagsToJob(createdJob.id, requirementTags, allTags);
+                } catch (tagErr) {
+                    console.error("Failed to assign tags to job:", tagErr);
+                    // Don't block job creation if tag assignment fails
+                }
+            }
 
             // Save survey questions separately if any exist
             const validQuestions = surveyQuestions.filter(q => q.question_text.trim());
@@ -1039,8 +1049,8 @@
                                     class="select w-full bg-slate-50 border-slate-200 focus:border-purple-500 rounded-xl text-sm"
                                     bind:value={jobData.salary_currency}
                                 >
-                                    <option value="USD">USD ($)</option>
                                     <option value="ETB">ETB</option>
+                                    <option value="USD">USD ($)</option>
                                     <option value="EUR">EUR (€)</option>
                                     <option value="GBP">GBP (£)</option>
                                     <option value="CAD">CAD ($)</option>

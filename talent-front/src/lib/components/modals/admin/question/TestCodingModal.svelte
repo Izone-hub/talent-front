@@ -13,6 +13,7 @@
     } from "lucide-svelte";
     import { questionService } from "$lib/api/questions.service";
     import { showToast } from "$lib/stores/toast";
+    import CodeEditor from "$lib/components/ui/CodeEditor.svelte";
 
     export let isOpen = false;
 
@@ -219,39 +220,12 @@
                                                 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 block"
                                                 >Code</label
                                             >
-                                            <textarea
-                                                class="w-full h-40 px-3 py-2 bg-slate-900 text-green-400 font-mono text-xs rounded-lg border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none outline-none"
+                                            <CodeEditor
                                                 bind:value={state.code}
+                                                language={q.coding_details?.language || 'python'}
+                                                height="12rem"
                                                 placeholder="Write your code here..."
-                                                spellcheck="false"
-                                                onkeydown={(e) => {
-                                                    if (
-                                                        e.key === "Tab"
-                                                    ) {
-                                                        e.preventDefault();
-                                                        const start =
-                                                            e.target.selectionStart;
-                                                        const end =
-                                                            e.target.selectionEnd;
-                                                        state.code =
-                                                            state.code.substring(
-                                                                0,
-                                                                start,
-                                                            ) +
-                                                                "    " +
-                                                                state.code.substring(
-                                                                    end,
-                                                                );
-                                                        requestAnimationFrame(
-                                                            () => {
-                                                                e.target.selectionStart =
-                                                                    e.target.selectionEnd =
-                                                                        start + 4;
-                                                            },
-                                                        );
-                                                    }
-                                                }}
-                                            ></textarea>
+                                            />
                                         </div>
 
                                         <!-- Run button -->

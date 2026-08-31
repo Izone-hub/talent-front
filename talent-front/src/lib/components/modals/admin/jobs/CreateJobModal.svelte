@@ -18,6 +18,7 @@
     } from "lucide-svelte";
     import { jobService } from "$lib/api/job.service";
     import { jobDescriptionService } from "$lib/api/jobDescription.service";
+    import { tagService } from "$lib/api/tag.service";
     import { showToast } from "$lib/stores/toast";
     import { settingsService } from "$lib/api/settings.service";
 
@@ -38,7 +39,7 @@
             remote_possible: false,
             salary_min: null,
             salary_max: null,
-            salary_currency: "",
+            salary_currency: "ETB",
             expires_at: "",
         },
     } = $props();
@@ -65,18 +66,52 @@
         { id: "gym", label: "Gym Membership", icon: Dumbbell },
     ];
 
-    const suggestedTags = [
-        "React",
-        "TypeScript",
-        "Node.js",
-        "Python",
-        "AWS",
-        "Docker",
-        "PostgreSQL",
-        "GraphQL",
-        "Git",
-        "REST APIs",
-    ];
+    let allTags = $state([]);
+    let tagLoading = $state(true);
+    let tagSearch = $state("");
+
+    async function loadTags() {
+        tagLoading = true;
+        try {
+            const data = await tagService.listTags();
+            allTags = data || [];
+        } catch (error) {
+            console.error("Failed to load tags:", error);
+            allTags = [];
+        } finally {
+            tagLoading = false;
+        }
+    }
+
+    $effect(() => {
+        if (isOpen) loadTags();
+    });
+
+    function tagName(tag) {
+        return (tag && (tag.name || tag.Name)) || "";
+    }
+
+    function tagColor(name) {
+        const match = allTags.find(
+            (t) => (t.name || t.Name)?.toLowerCase() === name.toLowerCase(),
+        );
+        return (match && (match.color || match.Color)) || "#7C3AED";
+    }
+
+    function getAvailableTags() {
+        const lower = requirementTags.map((t) => t.toLowerCase());
+        return allTags.filter(
+            (t) => !lower.includes(tagName(t).toLowerCase()),
+        );
+    }
+
+    function filteredTags() {
+        const q = tagSearch.trim().toLowerCase();
+        return getAvailableTags().filter((t) => {
+            const name = tagName(t);
+            return !q || name.toLowerCase().includes(q);
+        });
+    }
 
     let stepErrors = $state({});
     let enhancing = $state(false);
@@ -321,7 +356,7 @@
             payload.salary_max = parseInt(payload.salary_max, 10);
         else payload.salary_max = null;
 
-        if (!payload.salary_currency) payload.salary_currency = "USD";
+        if (!payload.salary_currency) payload.salary_currency = "ETB";
 
         payload.status = "draft";
 
@@ -338,6 +373,47 @@
                 stepErrors = {};
             }
         }
+    }
+
+    async function submit(e) {
+        e.preventDefault();
+        if (!validateStep(currentStep)) return;
+
+        let settings = {};
+        try {
+            settings = await settingsService.getCompanySettings();
+        } catch (err) {
+            console.error('Failed to load company settings:', err);
+        }
+
+        const payload = { ...jobData };
+        payload.company = settings.company_name || "";
+        payload.company_logo = settings.company_logo || null;
+        payload.company_website = settings.company_website || null;
+        payload.company_location = settings.company_location || null;
+        payload.location = settings.company_location || null;
+        if (!payload.responsibilities) payload.responsibilities = null;
+        if (!payload.benefits) payload.benefits = null;
+
+        if (!payload.expires_at) {
+            payload.expires_at = null;
+        } else if (payload.expires_at.length === 10) {
+            payload.expires_at = payload.expires_at + "T23:59:59Z";
+        }
+
+        if (payload.salary_min)
+            payload.salary_min = parseInt(payload.salary_min, 10);
+        else payload.salary_min = null;
+
+        if (payload.salary_max)
+            payload.salary_max = parseInt(payload.salary_max, 10);
+        else payload.salary_max = null;
+
+        if (!payload.salary_currency) payload.salary_currency = "ETB";
+
+        payload.status = "draft";
+
+        onsubmit(payload);
     }
 
     const stepLabels = ["Job Details", "Requirements", "Compensation", "Publishing"];
@@ -548,17 +624,50 @@
                                     <p class="text-xs text-base-content/40">
                                         Press <kbd class="kbd kbd-xs">Enter</kbd> to add each requirement as a tag
                                     </p>
-                                    <!-- Suggestions -->
-                                    <div class="flex flex-wrap gap-1.5 mt-1">
-                                        {#each suggestedTags as sTag}
-                                            <button
-                                                type="button"
-                                                class="px-2.5 py-0.5 bg-base-200 hover:bg-purple-600 hover:text-white rounded-full text-[11px] text-base-content/60 transition-all border border-transparent hover:border-purple-400 hover:-translate-y-0.5"
-                                                onclick={() => addTag(sTag)}
-                                            >
-                                                + {sTag}
-                                            </button>
-                                        {/each}
+                                    <!-- Tag picker from tags database -->
+                                    <div class="mt-3 border border-base-200 rounded-xl overflow-hidden">
+                                        <div class="flex items-center gap-2 px-3 py-2 bg-base-100 border-b border-base-200">
+                                            <p class="text-xs font-semibold text-base-content/60">
+                                                Select from existing tags
+                                            </p>
+                                            {#if tagLoading}
+                                                <span class="loading loading-spinner loading-xs text-purple-600"></span>
+                                            {/if}
+                                        </div>
+                                        {#if !tagLoading}
+                                            <div class="p-2">
+                                                <input
+                                                    type="text"
+                                                    class="input input-sm w-full bg-white border-base-200 focus:border-purple-500 rounded-lg text-xs mb-2"
+                                                    placeholder="Search tags..."
+                                                    bind:value={tagSearch}
+                                                />
+                                                {#if filteredTags().length === 0}
+                                                    <p class="text-xs text-base-content/40 text-center py-4">
+                                                        No available tags match.
+                                                    </p>
+                                                {:else}
+                                                    <div class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                                                        {#each filteredTags() as sTag}
+                                                            {@const sName = tagName(sTag)}
+                                                            {@const sColor = tagColor(sName)}
+                                                            <button
+                                                                type="button"
+                                                                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] transition-all border border-transparent hover:-translate-y-0.5"
+                                                                style="background-color: {sColor}1A; color: {sColor}; border-color: {sColor}40"
+                                                                onclick={() => addTag(sName)}
+                                                            >
+                                                                <span
+                                                                    class="w-2 h-2 rounded-full inline-block"
+                                                                    style="background-color: {sColor}"
+                                                                ></span>
+                                                                + {sName}
+                                                            </button>
+                                                        {/each}
+                                                    </div>
+                                                {/if}
+                                            </div>
+                                        {/if}
                                     </div>
                                 </div>
 
@@ -666,8 +775,8 @@
                                         class="select w-full bg-base-100 border-base-300 focus:border-purple-500 rounded-xl text-sm"
                                         bind:value={jobData.salary_currency}
                                     >
-                                        <option value="USD">USD ($)</option>
                                         <option value="ETB">ETB</option>
+                                        <option value="USD">USD ($)</option>
                                         <option value="EUR">EUR (€)</option>
                                         <option value="GBP">GBP (£)</option>
                                         <option value="CAD">CAD ($)</option>

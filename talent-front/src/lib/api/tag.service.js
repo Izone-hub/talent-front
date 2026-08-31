@@ -78,5 +78,60 @@ export const tagService = {
             job_id: jobId
         });
         return response;
+    },
+
+    /**
+     * Assign multiple tags to a single job by tag names
+     * Looks up each tag by name and assigns it to the job
+     * @param {string} jobId 
+     * @param {string[]} tagNames 
+     * @param {Tag[]} allTags - Full list of available tags for ID lookup
+     * @returns {Promise<Array>}
+     */
+    /**
+     * Get jobs assigned to a specific tag
+     * @param {string} tagId
+     * @returns {Promise<Object>} - { jobs: [], limit, offset }
+     */
+    getTagJobs: async (tagId) => {
+        try {
+            const response = await apiClient.get(`/tags/${tagId}/jobs`);
+            return response || { jobs: [] };
+        } catch (error) {
+            console.error(`Failed to get jobs for tag ${tagId}:`, error);
+            return { jobs: [] };
+        }
+    },
+
+    /**
+     * Get questions linked to a specific tag
+     * @param {string} tagId
+     * @returns {Promise<Object>} - { questions: [], limit, offset }
+     */
+    getTagQuestions: async (tagId) => {
+        try {
+            const response = await apiClient.get(`/tags/${tagId}/questions`);
+            return response || { questions: [] };
+        } catch (error) {
+            console.error(`Failed to get questions for tag ${tagId}:`, error);
+            return { questions: [] };
+        }
+    },
+
+    assignTagsToJob: async (jobId, tagNames, allTags = []) => {
+        const promises = tagNames.map(async (tagName) => {
+            // Find the tag object from the full list to get its ID
+            const tagObj = allTags.find(
+                (t) => (t.name || t.Name || '').toLowerCase() === tagName.toLowerCase()
+            );
+            const tagId = tagObj?.id || tagObj?.ID;
+            if (tagId) {
+                return apiClient.post('/tags/assign', { tag_id: tagId, job_id: jobId });
+            } else {
+                // Fallback: assign by name if ID not found
+                return apiClient.post('/tags/assign', { tag_name: tagName, job_id: jobId });
+            }
+        });
+        return Promise.allSettled(promises);
     }
 };

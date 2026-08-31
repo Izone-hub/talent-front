@@ -1,5 +1,5 @@
 <script>
-    import { goto } from "$app/navigation";
+    import { goto, replaceState } from "$app/navigation";
     import { page } from "$app/stores";
     import { auth } from "$lib/stores/authStore";
     import { quizService } from "$lib/api/quiz.service";
@@ -264,23 +264,26 @@
         } finally {
             loading = false;
         }
+        // Hide query params from URL after reading them
+        replaceState($page.url.pathname);
     }
 </script>
 
-<div class="min-h-screen bg-gradient-to-b from-slate-50 to-blue-50/30 font-sans">
+<div class="min-h-screen bg-slate-50 font-sans">
     <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
 
         {#if loading}
-            <div class="flex items-center justify-center py-20">
+            <div class="flex flex-col items-center justify-center gap-3 py-20">
                 <Loader2 class="h-8 w-8 animate-spin text-indigo-600" />
+                <span class="text-sm text-slate-400">Loading results…</span>
             </div>
 
         {:else if error}
-            <div class="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-                <XCircle class="mx-auto h-12 w-12 text-red-400" />
-                <h2 class="mt-4 text-lg font-semibold text-red-700">Failed to load data</h2>
-                <p class="mt-2 text-sm text-red-500">{error}</p>
-                <button onclick={() => goto("/applications")} class="btn mt-6 gap-2 border-red-300 bg-white text-red-600 hover:bg-red-50">
+            <div class="mx-auto max-w-md rounded-xl border border-red-200 bg-white p-8 text-center shadow-sm">
+                <XCircle class="mx-auto h-10 w-10 text-red-400" />
+                <h2 class="mt-3 text-lg font-semibold text-slate-800">Unable to load results</h2>
+                <p class="mt-2 text-sm text-slate-500">{error}</p>
+                <button onclick={() => goto("/applications")} class="btn mt-5 gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     <ArrowLeft class="h-4 w-4" />
                     Back
                 </button>
@@ -288,279 +291,254 @@
 
         {:else if data}
 
-            <!-- User Header -->
-            <div class="relative mb-8 overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-blue-500 p-6 text-white shadow-lg sm:p-8">
-                <div class="absolute right-0 top-0 h-48 w-48 translate-x-16 -translate-y-16 rounded-full bg-white/5 blur-2xl" />
-                <div class="relative flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
-                    <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/20 text-2xl font-bold text-white shadow-inner backdrop-blur-sm">
-                        {initials(data.github_username || data.full_name)}
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex flex-wrap items-center gap-3">
-                            <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">{displayName(data)}</h1>
-                            {#if data.github_username}
-                                <a href="https://github.com/{data.github_username}" target="_blank" rel="noopener noreferrer" class="badge gap-1 border-white/30 bg-white/10 text-white hover:bg-white/20" style="padding: 0.375rem 0.75rem;">
-                                    <Github class="h-3.5 w-3.5" />
-                                    @{data.github_username}
-                                </a>
-                            {/if}
-                        </div>
-                        {#if data.job_title}
-                            <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm font-medium text-indigo-100">
-                                <Briefcase class="h-4 w-4 shrink-0" />
-                                <span>{data.job_title}</span>
-                                {#if data.job_company}
-                                    <span class="opacity-80">&middot; {data.job_company}</span>
-                                {/if}
-                            </div>
-                        {/if}
-                        <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-indigo-100">
-                            {#if data.quiz_title}
-                                <span class="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
-                                    <BookOpen class="h-3 w-3" />
-                                    {data.quiz_title}
-                                </span>
-                            {/if}
-                            <span class="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
-                                ID: {data.user_id || id}
-                            </span>
-                            {#if data.filename}
-                                <span class="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
-                                    <FileText class="h-3 w-3" />
-                                    {data.filename}
-                                </span>
-                            {/if}
-                            {#if data.char_count}
-                                <span class="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
-                                    {data.char_count.toLocaleString()} chars
-                                </span>
-                            {/if}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
-
             <!-- Final Exam Score -->
-            <div class="mb-6 rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50 p-6 shadow-sm">
-                <div class="mb-4 flex items-center gap-2">
-                    <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-                        <Award class="h-4 w-4 text-white" />
+            <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <div class="flex flex-col items-center gap-5 sm:flex-row sm:items-start sm:gap-8">
+                    <!-- Left: circular gauge -->
+                    <div class="relative shrink-0">
+                        <svg class="h-36 w-36" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="42" fill="none" stroke-width="7" stroke="#e2e8f0" stroke-linecap="round" />
+                            <circle
+                                cx="50" cy="50" r="42" fill="none"
+                                stroke-width="7"
+                                stroke={data.final_score >= 70 ? '#22c55e' : '#ef4444'}
+                                stroke-linecap="round"
+                                stroke-dasharray="{2 * Math.PI * 42}"
+                                stroke-dashoffset="{2 * Math.PI * 42 * (1 - data.final_score / 100)}"
+                                transform="rotate(-90 50 50)"
+                                class="transition-all duration-700"
+                            />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span class="text-3xl font-bold text-slate-800">{data.final_score}<span class="text-lg text-slate-400">%</span></span>
+                            <span class="text-[10px] font-medium uppercase tracking-wider text-slate-400">Final</span>
+                        </div>
                     </div>
-                    <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-700">Final Exam Score</h2>
-                </div>
+                    <!-- Right: details -->
+                    <div class="flex-1 text-center sm:text-left">
+                        <div class="flex items-center gap-2 justify-center sm:justify-start">
+                            <Award class="h-5 w-5 text-indigo-600" />
+                            <h2 class="text-lg font-semibold text-slate-800">Final Exam Score</h2>
+                        </div>
+                        <p class="mt-1 text-sm text-slate-500">
+                            {#if data.ats_score}
+                                Weighted combination of <strong class="text-slate-700">80%</strong> quiz and <strong class="text-slate-700">20%</strong> ATS CV score
+                            {:else}
+                                Based on quiz performance (ATS CV not available)
+                            {/if}
+                        </p>
 
-                <div class="mb-6 text-center">
-                    <span class="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-7xl font-bold text-transparent">
-                        {data.final_score}
-                    </span>
-                    <span class="text-3xl font-bold text-slate-400">%</span>
+                        <div class="mt-4">
+                            {#if data.final_score >= 70}
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                                    <CheckCircle2 class="h-3.5 w-3.5" /> PASSED
+                                </span>
+                            {:else}
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                                    <XCircle class="h-3.5 w-3.5" /> NEEDS IMPROVEMENT
+                                </span>
+                            {/if}
+                        </div>
 
-                    <div class="mt-3 text-sm text-slate-500">
-                        {#if data.ats_score}
-                            <span class="font-medium text-indigo-600">80%</span> Quiz + <span class="font-medium text-indigo-600">20%</span> ATS CV Format
-                        {:else}
-                            Quiz Score (ATS CV not available)
-                        {/if}
-                    </div>
-
-                    <div class="mt-3">
-                        {#if data.final_score >= 70}
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                                <CheckCircle2 class="h-4 w-4" />
-                                PASSED
-                            </span>
-                        {:else}
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-4 py-1.5 text-sm font-semibold text-red-700 ring-1 ring-red-200">
-                                <XCircle class="h-4 w-4" />
-                                FAILED
-                            </span>
-                        {/if}
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="rounded-xl bg-white p-4 text-center shadow-sm">
-                        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Quiz Score</div>
-                        <div class="mt-1 text-2xl font-bold text-slate-700">{data.quiz_attempt?.score ?? 0}%</div>
-                        <div class="text-xs text-slate-400">× 80% = {Math.round((data.quiz_attempt?.score ?? 0) * 0.8)}</div>
-                    </div>
-                    <div class="rounded-xl bg-white p-4 text-center shadow-sm">
-                        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">ATS CV Score</div>
-                        <div class="mt-1 text-2xl font-bold text-slate-700">{data.ats_score?.score ?? '--'}%</div>
-                        <div class="text-xs text-slate-400">{data.ats_score ? `× 20% = ${Math.round(data.ats_score.score * 0.2)}` : 'Not available'}</div>
+                        <div class="mt-4 grid grid-cols-2 gap-3">
+                            <div class="rounded-lg bg-slate-50 px-3 py-2.5 text-center">
+                                <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Quiz</div>
+                                <div class="mt-0.5 text-lg font-bold text-slate-700">{data.quiz_attempt?.score ?? 0}%</div>
+                                <div class="text-[11px] text-slate-400">× 0.8 = {Math.round((data.quiz_attempt?.score ?? 0) * 0.8)}</div>
+                            </div>
+                            <div class="rounded-lg bg-slate-50 px-3 py-2.5 text-center">
+                                <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">ATS CV</div>
+                                <div class="mt-0.5 text-lg font-bold text-slate-700">{data.ats_score?.score ?? '—'}%</div>
+                                <div class="text-[11px] text-slate-400">{data.ats_score ? `× 0.2 = ${Math.round(data.ats_score.score * 0.2)}` : 'N/A'}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Quiz Score -->
-            {#if data.quiz_attempt}
-                {@const pct = data.quiz_attempt.score ?? 0}
-                <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-4 flex items-center gap-2">
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-                            <Target class="h-4 w-4 text-indigo-600" />
-                        </div>
-                        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Quiz Score</h2>
-                    </div>
+            <!-- Quiz & ATS side by side -->
+            <div class="mb-6 grid gap-6 sm:grid-cols-2">
 
-                    <div class="mb-6 text-center">
-                        <span class="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-6xl font-bold text-transparent">
-                            {pct}
-                        </span>
-                        <span class="text-2xl font-bold text-slate-400">%</span>
-
-                        <div class="mt-2 text-sm text-slate-500">
-                            {data.quiz_attempt.correct_count ?? 0} / {data.quiz_attempt.total_count ?? 0} correct
+                <!-- Quiz Score -->
+                {#if data.quiz_attempt}
+                    {@const pct = data.quiz_attempt.score ?? 0}
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div class="mb-3 flex items-center gap-2">
+                            <div class="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50">
+                                <Target class="h-3.5 w-3.5 text-blue-600" />
+                            </div>
+                            <h3 class="text-sm font-medium text-slate-600">Quiz Score</h3>
                         </div>
 
-                        {#if data.quiz_attempt.passed !== null && data.quiz_attempt.passed !== undefined}
-                            <div class="mt-3">
+                        <div class="flex items-center gap-4">
+                            <svg class="h-20 w-20 shrink-0" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" fill="none" stroke-width="6" stroke="#e2e8f0" stroke-linecap="round" />
+                                <circle
+                                    cx="50" cy="50" r="42" fill="none"
+                                    stroke-width="6" stroke="#3b82f6"
+                                    stroke-linecap="round"
+                                    stroke-dasharray="{2 * Math.PI * 42}"
+                                    stroke-dashoffset="{2 * Math.PI * 42 * (1 - pct / 100)}"
+                                    transform="rotate(-90 50 50)"
+                                    class="transition-all duration-700"
+                                />
+                            </svg>
+                            <div>
+                                <div class="text-2xl font-bold text-slate-800">{pct}<span class="text-sm font-normal text-slate-400">%</span></div>
+                                <div class="text-xs text-slate-400">{data.quiz_attempt.correct_count ?? 0} of {data.quiz_attempt.total_count ?? 0} correct</div>
                                 {#if data.quiz_attempt.passed}
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                                        <CheckCircle2 class="h-4 w-4" />
-                                        PASSED
+                                    <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                        <CheckCircle2 class="h-3 w-3" /> Passed
                                     </span>
                                 {:else}
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-4 py-1.5 text-sm font-semibold text-red-700 ring-1 ring-red-200">
-                                        <XCircle class="h-4 w-4" />
-                                        FAILED
+                                    <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                                        <XCircle class="h-3 w-3" /> Below threshold
                                     </span>
                                 {/if}
                             </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                <div class="h-full rounded-full bg-blue-500 transition-all duration-700" style="width: {pct}%"></div>
+                            </div>
+                            <div class="mt-1 flex justify-between text-[11px] text-slate-400">
+                                <span>0%</span>
+                                <span>Pass: {data.quiz_attempt.passing_score ?? 70}%</span>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- ATS Score -->
+                {#if data.ats_score}
+                    {@const ats = data.ats_score}
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div class="mb-3 flex items-center gap-2">
+                            <div class="flex h-7 w-7 items-center justify-center rounded-md bg-violet-50">
+                                <FileText class="h-3.5 w-3.5 text-violet-600" />
+                            </div>
+                            <h3 class="text-sm font-medium text-slate-600">ATS CV Score</h3>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <svg class="h-20 w-20 shrink-0" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" fill="none" stroke-width="6" stroke="#e2e8f0" stroke-linecap="round" />
+                                <circle
+                                    cx="50" cy="50" r="42" fill="none"
+                                    stroke-width="6" stroke="#8b5cf6"
+                                    stroke-linecap="round"
+                                    stroke-dasharray="{2 * Math.PI * 42}"
+                                    stroke-dashoffset="{2 * Math.PI * 42 * (1 - ats.score / 100)}"
+                                    transform="rotate(-90 50 50)"
+                                    class="transition-all duration-700"
+                                />
+                            </svg>
+                            <div>
+                                <div class="text-2xl font-bold text-slate-800">{ats.score}<span class="text-sm font-normal text-slate-400">%</span></div>
+                                <div class="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                                    {ats.grade}
+                                </div>
+                            </div>
+                        </div>
+
+                        {#if ats.checks.length}
+                            <div class="mt-4 space-y-2.5">
+                                {#each ats.checks as check}
+                                    {@const checkPct = check.max > 0 ? Math.round((check.score / check.max) * 100) : 0}
+                                    <div>
+                                        <div class="flex items-center justify-between text-xs">
+                                            <span class="text-slate-600">{check.label}</span>
+                                            <span class="font-medium text-slate-500">{check.score}/{check.max}</span>
+                                        </div>
+                                        <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                            <div class="h-full rounded-full bg-violet-400 transition-all duration-500" style="width: {checkPct}%"></div>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
+
+                        {#if ats.summary}
+                            <div class="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                                {ats.summary}
+                            </div>
                         {/if}
                     </div>
-
-                    <div class="mb-3">
-                        <div class="mb-1 flex items-center justify-between text-sm">
-                            <span class="font-medium text-slate-700">Score</span>
-                            <span class="font-semibold text-slate-500">{pct}%</span>
-                        </div>
-                        <div class="h-3 overflow-hidden rounded-full bg-slate-100">
-                            <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 transition-all duration-700" style="width: {pct}%"></div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-                        Passing threshold: {data.quiz_attempt.passing_score ?? 0}% &middot; Status: <span class="font-medium capitalize">{data.quiz_attempt.status}</span>
-                    </div>
-                </div>
-            {/if}
-
-            <!-- ATS Score -->
-            {#if data.ats_score}
-                {@const ats = data.ats_score}
-                <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-4 flex items-center gap-2">
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-                            <Target class="h-4 w-4 text-indigo-600" />
-                        </div>
-                        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">ATS Score</h2>
-                    </div>
-
-                    <div class="mb-6 text-center">
-                        <span class="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-6xl font-bold text-transparent">
-                            {ats.score}
-                        </span>
-                        <span class="text-2xl font-bold text-slate-400">%</span>
-
-                        <div class="mt-3">
-                            <span class="badge gap-1.5 rounded-full bg-indigo-50 px-4 py-1.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200">
-                                {ats.grade}
-                            </span>
-                        </div>
-                    </div>
-
-                    {#each ats.checks as check}
-                        {@const pct = check.max > 0 ? Math.round((check.score / check.max) * 100) : 0}
-                        <div class="mb-3">
-                            <div class="mb-1 flex items-center justify-between text-sm">
-                                <span class="font-medium text-slate-700">{check.label}</span>
-                                <span class="font-semibold text-slate-500">{check.score}/{check.max}</span>
-                            </div>
-                            <div class="h-3 overflow-hidden rounded-full bg-slate-100">
-                                <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 transition-all duration-700" style="width: {pct}%"></div>
-                            </div>
-                            {#if check.message}
-                                <p class="mt-1 text-xs text-slate-500">{check.message}</p>
-                            {/if}
-                        </div>
-                    {/each}
-
-                    {#if ats.summary}
-                        <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-                            {ats.summary}
-                        </div>
-                    {/if}
-                </div>
-            {/if}
+                {/if}
+            </div>
 
             <!-- Extracted Text -->
             {#if data.extracted_text}
                 <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-4 flex items-center gap-2">
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-                            <FileText class="h-4 w-4 text-indigo-600" />
-                        </div>
-                        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Extracted Text</h2>
-                    </div>
-                    <pre class="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-600">{data.extracted_text}</pre>
+                    <h3 class="mb-3 text-sm font-medium text-slate-600">Extracted CV Text</h3>
+                    <pre class="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-600">{data.extracted_text}</pre>
                 </div>
             {/if}
 
             <!-- Quiz Answers -->
             {#if data.quiz_answers?.length}
-                <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="mb-4 flex items-center gap-2">
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
-                            <BookOpen class="h-4 w-4 text-indigo-600" />
+                {@const correctCount = data.quiz_answers.filter(a => a.IsCorrect).length}
+                {@const skippedCount = data.quiz_answers.filter(a => a.IsSkipped).length}
+                {@const wrongCount = data.quiz_answers.length - correctCount - skippedCount}
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-medium text-slate-600">Quiz Answers</h3>
+                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                                {data.quiz_answers.length}
+                            </span>
                         </div>
-                        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Quiz Answers</h2>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <span class="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">✓ {correctCount}</span>
+                            <span class="flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-600">✗ {wrongCount}</span>
+                            {#if skippedCount > 0}
+                                <span class="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-600">⊘ {skippedCount}</span>
+                            {/if}
+                        </div>
                     </div>
 
-                    <div class="overflow-x-auto rounded-xl border border-slate-200">
-                        <table class="table table-zebra table-sm w-full text-sm">
+                    <div class="overflow-x-auto rounded-lg border border-slate-200">
+                        <table class="w-full text-sm">
                             <thead>
-                                <tr class="bg-slate-50 text-xs uppercase text-slate-500">
-                                    <th class="px-3 py-2">#</th>
-                                    <th class="px-3 py-2">Your Answer</th>
-                                    <th class="px-3 py-2">Correct Answer</th>
-                                    <th class="px-3 py-2">Result</th>
-                                    <th class="px-3 py-2">Time</th>
+                                <tr class="border-b border-slate-100 bg-slate-50/80 text-left text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                                    <th class="px-3 py-2.5">#</th>
+                                    <th class="px-3 py-2.5">Your Answer</th>
+                                    <th class="px-3 py-2.5">Correct Answer</th>
+                                    <th class="px-3 py-2.5">Result</th>
+                                    <th class="px-3 py-2.5 text-right">Time</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody class="divide-y divide-slate-100">
                                 {#each data.quiz_answers as answer, idx}
-                                    <tr>
-                                        <td class="px-3 py-2 font-mono text-xs text-slate-400">{idx + 1}</td>
-                                        <td class="max-w-xs truncate px-3 py-2">
+                                    <tr class="hover:bg-slate-50/50 transition-colors">
+                                        <td class="px-3 py-2.5 font-mono text-xs text-slate-400 w-10">{idx + 1}</td>
+                                        <td class="max-w-[12rem] truncate px-3 py-2.5">
                                             {#if answer.IsSkipped}
-                                                <span class="text-amber-500 italic">Skipped</span>
+                                                <span class="text-amber-500 italic text-xs">Skipped</span>
                                             {:else}
-                                                <!-- || (not ??) so empty-string answers also render as -- -->
-                                                <span class="text-slate-700">{answer.UserAnswer || "--"}</span>
+                                                <span class="text-slate-700">{answer.UserAnswer || "—"}</span>
                                             {/if}
                                         </td>
-                                        <td class="max-w-xs truncate px-3 py-2">
+                                        <td class="max-w-[12rem] truncate px-3 py-2.5">
                                             {#if answer.IsSkipped}
-                                                <span class="text-slate-400">--</span>
+                                                <span class="text-slate-300">—</span>
                                             {:else}
                                                 <span class="font-medium {answer.IsCorrect ? 'text-emerald-600' : 'text-red-500'}">
-                                                    {answer.CorrectAnswer || "--"}
+                                                    {answer.CorrectAnswer || "—"}
                                                 </span>
                                             {/if}
                                         </td>
-                                        <td class="px-3 py-2">
+                                        <td class="px-3 py-2.5">
                                             {#if answer.IsSkipped}
-                                                <span class="badge badge-sm badge-ghost">Skipped</span>
+                                                <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">Skipped</span>
                                             {:else if answer.IsCorrect}
-                                                <span class="badge badge-sm badge-success">Correct</span>
+                                                <span class="inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">Correct</span>
                                             {:else}
-                                                <span class="badge badge-sm badge-error">Wrong</span>
+                                                <span class="inline-block rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-600">Wrong</span>
                                             {/if}
                                         </td>
-                                        <td class="px-3 py-2 font-mono text-xs text-slate-500">
+                                        <td class="px-3 py-2.5 text-right font-mono text-xs text-slate-400">
                                             {formatTime(answer.TimeSpentSeconds)}
                                         </td>
                                     </tr>
@@ -572,9 +550,9 @@
             {/if}
 
             <!-- Bottom Actions -->
-            <div class="flex justify-center gap-3 pb-8">
-                <button onclick={() => goto("/applications")} class="btn gap-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
-                    <ArrowLeft class="h-4 w-4" />
+            <div class="mt-8 flex justify-center pb-8">
+                <button onclick={() => goto("/applications")} class="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 shadow-sm transition-all hover:border-slate-300 hover:text-slate-900">
+                    <ArrowLeft class="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
                     Back to Applications
                 </button>
             </div>

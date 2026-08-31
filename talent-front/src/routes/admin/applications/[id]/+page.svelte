@@ -1,692 +1,1000 @@
 <script>
-	import { page } from "$app/stores";
-	import { applicationService } from "$lib/api/application.service";
-	import { intelligenceService } from "$lib/api/intelligence.service";
-	import { ExternalLink, BrainCircuit, GitBranch, Code2, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy } from "lucide-svelte";
-	import PassFailBadge from "$lib/components/ui/PassFailBadge.svelte";
-	import PageLoader from "$lib/components/ui/PageLoader.svelte";
-	import ButtonLoader from "$lib/components/ui/ButtonLoader.svelte";
-	import { showToast } from "$lib/stores/toast";
-	import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
+    import { applicationService } from "$lib/api/application.service";
+    import { intelligenceService } from "$lib/api/intelligence.service";
+    import { ExternalLink, BrainCircuit, GitBranch, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy, User, Mail, Calendar, MapPin, Link, Star, Clock, Award, ThumbsUp, ThumbsDown, Sparkles, FileText, Code2 } from "lucide-svelte";
+    import { showToast } from "$lib/stores/toast";
+    import { goto } from "$app/navigation";
 
-	let applicationId = $state("");
-	let application = $state(null);
-	let loading = $state(true);
-	let isProcessing = $state(false);
-	let intelligenceData = $state(null);
-	let parsedAnalysis = $state(null);
-	let parsedGithub = $state(null);
-	let loadingIntelligence = $state(false);
-	let accessDenied = $state(false);
+    let applicationId = $state("");
+    let application = $state(null);
+    let loading = $state(true);
+    let isProcessing = $state(false);
+    let intelligenceData = $state(null);
+    let parsedAnalysis = $state(null);
+    let parsedGithub = $state(null);
+    let loadingIntelligence = $state(false);
+    let accessDenied = $state(false);
 
-	$effect(() => {
-		applicationId = $page.params.id;
-		loadApplication();
-	});
+    let activeTab = $state("overview");
 
-	async function loadApplication() {
-		loading = true;
-		accessDenied = false;
-		try {
-			const data = await applicationService.getApplicationDetail(applicationId);
-			const status = (data?.Status || data?.status || "").toLowerCase();
-			if (status !== "quiz_completed") {
-				application = null;
-				accessDenied = true;
-				return;
-			}
-			application = data;
+    $effect(() => {
+        applicationId = $page.params.id;
+        loadApplication();
+    });
 
-			const userId = getVal(data, "UserID", "user_id", "UserId");
-			if (userId) {
-				loadingIntelligence = true;
-				try {
-					const intelligence = await intelligenceService.fetchGitHubIntelligence(userId);
-					intelligenceData = intelligence;
-					parseIntelligenceData(intelligence);
-				} catch (error) {
-					console.error("Failed to fetch GitHub intelligence:", error);
-				} finally {
-					loadingIntelligence = false;
-				}
-			}
-		} catch (error) {
-			showToast("Failed to load application", "error");
-			console.error(error);
-		} finally {
-			loading = false;
-		}
-	}
+    async function loadApplication() {
+        loading = true;
+        accessDenied = false;
+        try {
+            const data = await applicationService.getApplicationDetail(applicationId);
+            const status = (data?.Status || data?.status || "").toLowerCase();
+            if (status !== "quiz_completed") {
+                application = null;
+                accessDenied = true;
+                return;
+            }
+            application = data;
 
-	function parseIntelligenceData(data) {
-		if (!data) return;
+            const userId = getVal(data, "UserID", "user_id", "UserId");
+            if (userId) {
+                loadingIntelligence = true;
+                try {
+                    const intelligence = await intelligenceService.fetchGitHubIntelligence(userId);
+                    intelligenceData = intelligence;
+                    parseIntelligenceData(intelligence);
+                } catch (error) {
+                    console.error("Failed to fetch GitHub intelligence:", error);
+                } finally {
+                    loadingIntelligence = false;
+                }
+            }
+        } catch (error) {
+            showToast("Failed to load application", "error");
+            console.error(error);
+        } finally {
+            loading = false;
+        }
+    }
 
-		const aiSummary = data.ai_summary;
-		if (aiSummary?.summary) {
-			try {
-				const parsed = typeof aiSummary.summary === "string"
-					? JSON.parse(aiSummary.summary)
-					: aiSummary.summary;
-				parsedAnalysis = parsed?.analysis || null;
-				parsedGithub = parsed?.github || null;
-			} catch {
-				parsedAnalysis = null;
-				parsedGithub = null;
-			}
-		}
-	}
+    function parseIntelligenceData(data) {
+        if (!data) return;
+        const aiSummary = data.ai_summary;
+        if (aiSummary?.summary) {
+            try {
+                const parsed = typeof aiSummary.summary === "string"
+                    ? JSON.parse(aiSummary.summary)
+                    : aiSummary.summary;
+                parsedAnalysis = parsed?.analysis || null;
+                parsedGithub = parsed?.github || null;
+            } catch {
+                parsedAnalysis = null;
+                parsedGithub = null;
+            }
+        }
+    }
 
-	function isFinishedQuiz() {
-		return (application?.Status || application?.status || "").toLowerCase() === "quiz_completed";
-	}
+    function isFinishedQuiz() {
+        return (application?.Status || application?.status || "").toLowerCase() === "quiz_completed";
+    }
 
-	function getVal(obj, ...keys) {
-		if (!obj) return null;
-		for (const key of keys) {
-			const val = obj[key];
-			if (val != null && val !== "") return val;
-		}
-		return null;
-	}
+    function getVal(obj, ...keys) {
+        if (!obj) return null;
+        for (const key of keys) {
+            const val = obj[key];
+            if (val != null && val !== "") return val;
+        }
+        return null;
+    }
 
-	function formatDate(dateStr) {
-		if (!dateStr) return "—";
-		try {
-			return new Date(dateStr).toLocaleDateString("en-US", {
-				month: "short",
-				day: "numeric",
-				year: "numeric",
-			});
-		} catch {
-			return "—";
-		}
-	}
+    function formatDate(dateStr) {
+        if (!dateStr) return "—";
+        try {
+            return new Date(dateStr).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+            });
+        } catch {
+            return "—";
+        }
+    }
 
-	function statusBadgeClass(status) {
-		switch ((status || "").toLowerCase()) {
-			case "submitted": return "badge-info";
-			case "quiz_started": return "badge-warning";
-			case "quiz_completed": return "badge-warning";
-			case "under_review": return "badge-info";
-			case "shortlisted": return "badge-primary";
-			case "interviewed": return "badge-primary";
-			case "accepted": return "badge-success";
-			case "rejected": return "badge-error";
-			case "withdrawn": return "badge-ghost";
-			default: return "badge-ghost";
-		}
-	}
+    function statusBadgeClass(status) {
+        switch ((status || "").toLowerCase()) {
+            case "submitted": return "bg-blue-100 text-blue-700";
+            case "quiz_started": return "bg-amber-100 text-amber-700";
+            case "quiz_completed": return "bg-amber-100 text-amber-700";
+            case "under_review": return "bg-cyan-100 text-cyan-700";
+            case "shortlisted": return "bg-indigo-100 text-indigo-700";
+            case "interviewed": return "bg-violet-100 text-violet-700";
+            case "accepted": return "bg-emerald-100 text-emerald-700";
+            case "rejected": return "bg-rose-100 text-rose-700";
+            case "withdrawn": return "bg-gray-100 text-gray-500";
+            default: return "bg-gray-100 text-gray-600";
+        }
+    }
 
-	function getApplicationId() {
-		return application?.ID || application?.id || applicationId;
-	}
+    function getApplicationId() {
+        return application?.ID || application?.id || applicationId;
+    }
 
-	function computeQuizStats() {
-		const answers = intelligenceData?.quiz_answers || [];
-		const total = answers.length;
-		const correct = answers.filter(a => a.IsCorrect === true).length;
-		const accuracy = total ? Math.round((correct / total) * 100) : 0;
-		const last = answers.length ? answers[answers.length - 1]?.LastSavedAt : null;
-		return { total, correct, accuracy, last };
-	}
+    function computeQuizStats() {
+        const answers = intelligenceData?.quiz_answers || [];
+        const total = answers.length;
+        const correct = answers.filter(a => a.IsCorrect === true).length;
+        const accuracy = total ? Math.round((correct / total) * 100) : 0;
+        const last = answers.length ? answers[answers.length - 1]?.LastSavedAt : null;
+        return { total, correct, accuracy, last };
+    }
 
-	function getStrengths() {
-		const s = intelligenceData?.ai_summary?.strengths;
-		if (!s) return [];
-		return s.split(";").map(x => x.trim()).filter(Boolean);
-	}
+    function getStrengths() {
+        const s = intelligenceData?.ai_summary?.strengths;
+        if (!s) return [];
+        return s.split(";").map(x => x.trim()).filter(Boolean);
+    }
 
-	function getWeaknesses() {
-		const w = intelligenceData?.ai_summary?.weaknesses;
-		if (!w) return [];
-		return w.split(";").map(x => x.trim()).filter(Boolean);
-	}
+    function getWeaknesses() {
+        const w = intelligenceData?.ai_summary?.weaknesses;
+        if (!w) return [];
+        return w.split(";").map(x => x.trim()).filter(Boolean);
+    }
 
-	function getLangPercentage(lang) {
-		if (typeof lang === "object" && lang.percentage) return lang.percentage;
-		return null;
-	}
+    function getLangPercentage(lang) {
+        if (typeof lang === "object" && lang.percentage) return lang.percentage;
+        return null;
+    }
 
-	function getLangName(lang) {
-		if (typeof lang === "string") return lang;
-		return lang?.language || lang?.name || String(lang);
-	}
+    function getLangName(lang) {
+        if (typeof lang === "string") return lang;
+        return lang?.language || lang?.name || String(lang);
+    }
 
-	async function acceptApplication() {
-		if (!application) return;
-		isProcessing = true;
-		try {
-			const response = await applicationService.acceptApplication(getApplicationId());
-			application = response || {
-				...application,
-				Status: "accepted",
-				status: "accepted"
-			};
-			showToast("Application accepted", "success");
-			await loadApplication();
-		} catch (error) {
-			showToast("Failed to accept application", "error");
-			console.error(error);
-		} finally {
-			isProcessing = false;
-		}
-	}
+    async function acceptApplication() {
+        if (!application) return;
+        isProcessing = true;
+        try {
+            const response = await applicationService.acceptApplication(getApplicationId());
+            application = response || {
+                ...application,
+                Status: "accepted",
+                status: "accepted"
+            };
+            showToast("Application accepted", "success");
+            await loadApplication();
+        } catch (error) {
+            showToast("Failed to accept application", "error");
+            console.error(error);
+        } finally {
+            isProcessing = false;
+        }
+    }
 
-	async function rejectApplication() {
-		if (!application) return;
-		isProcessing = true;
-		try {
-			const response = await applicationService.rejectApplication(getApplicationId());
-			application = response || {
-				...application,
-				Status: "rejected",
-				status: "rejected"
-			};
-			showToast("Application rejected", "success");
-			await loadApplication();
-		} catch (error) {
-			showToast("Failed to reject application", "error");
-			console.error(error);
-		} finally {
-			isProcessing = false;
-		}
-	}
+    async function rejectApplication() {
+        if (!application) return;
+        isProcessing = true;
+        try {
+            const response = await applicationService.rejectApplication(getApplicationId());
+            application = response || {
+                ...application,
+                Status: "rejected",
+                status: "rejected"
+            };
+            showToast("Application rejected", "success");
+            await loadApplication();
+        } catch (error) {
+            showToast("Failed to reject application", "error");
+            console.error(error);
+        } finally {
+            isProcessing = false;
+        }
+    }
 
-	function goBack() {
-		goto("/admin/applications");
-	}
+    function goBack() {
+        goto("/admin/applications");
+    }
 
-	const quizStats = $derived(computeQuizStats());
-	const atsScore = $derived(parsedAnalysis?.ats_score ?? null);
-	const scoreBreakdown = $derived(parsedAnalysis?.score_breakdown || null);
-	const checks = $derived(parsedAnalysis?.checks || []);
-	const suggestedSkills = $derived(parsedAnalysis?.suggested_fields?.skills || []);
-	const suggestedHeadline = $derived(parsedAnalysis?.suggested_fields?.headline || null);
-	const suggestedEducation = $derived(parsedAnalysis?.suggested_fields?.education || []);
-	const suggestedExperience = $derived(parsedAnalysis?.suggested_fields?.experience || []);
-	const ghIntelligence = $derived(intelligenceData?.github_intelligence || {});
-	const ghLanguages = $derived(parsedGithub?.languages || ghIntelligence.top_languages || []);
+    const quizStats = $derived(computeQuizStats());
+    const atsScore = $derived(parsedAnalysis?.ats_score ?? null);
+    const scoreBreakdown = $derived(parsedAnalysis?.score_breakdown || null);
+    const checks = $derived(parsedAnalysis?.checks || []);
+    const suggestedSkills = $derived(parsedAnalysis?.suggested_fields?.skills || []);
+    const suggestedHeadline = $derived(parsedAnalysis?.suggested_fields?.headline || null);
+    const suggestedEducation = $derived(parsedAnalysis?.suggested_fields?.education || []);
+    const suggestedExperience = $derived(parsedAnalysis?.suggested_fields?.experience || []);
+    const ghIntelligence = $derived(intelligenceData?.github_intelligence || {});
+    const ghLanguages = $derived(parsedGithub?.languages || ghIntelligence.top_languages || []);
 
-	let openSections = $state({
-		atsScore: true,
-		strengths: true,
-		fieldChecks: false,
-		githubProfile: true,
-		suggested: false,
-		quizActivity: false,
-	});
+    const applicantName = $derived(getVal(application, "Name", "name", "ApplicantName") || "Applicant");
+    const applicantInitials = $derived(
+        applicantName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    );
+    const applicantScore = $derived(getVal(application, "QuizScore", "quiz_score") || 0);
+    const applicantEmail = $derived(getVal(application, "Email", "email"));
+    const applicantGithub = $derived(getVal(application, "GithubUsername", "github_username"));
+    const applicantLocation = $derived(getVal(application, "Location", "location"));
+    const applicantPhone = $derived(getVal(application, "PhoneNumber", "phone_number"));
+    const applicantSubmitted = $derived(application?.SubmittedAt || application?.submitted_at);
+    const coverLetter = $derived(getVal(application, "CoverLetter", "cover_letter", "CoverLetterText"));
 
-	function toggleSection(key) {
-		openSections[key] = !openSections[key];
-	}
+    // Composite score: 80% Quiz + 20% ATS (admin only)
+    const compositeScore = $derived.by(() => {
+        const quiz = applicantScore || 0;
+        const ats = atsScore || 0;
+        const hasQuiz = applicantScore != null && applicantScore > 0;
+        const hasAts = atsScore != null && atsScore > 0;
+        if (hasQuiz && hasAts) return Math.round(quiz * 0.8 + ats * 0.2);
+        if (hasQuiz) return Math.round(quiz * 0.8);
+        if (hasAts) return Math.round(ats * 0.2);
+        return null;
+    });
 </script>
 
-<div class="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-purple-50/40 text-slate-900">
-	<div class="mx-auto w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-		{#if loading}
-			<PageLoader message="Loading application details..." />
-		{:else if !application}
-			<div class="flex min-h-[70vh] items-center justify-center rounded-3xl border border-white/70 bg-white/80 p-12 text-center shadow-sm backdrop-blur">
-				<div class="max-w-md space-y-4">
-					<div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-						<BrainCircuit size={30} />
-					</div>
-					<div>
-						<h3 class="text-2xl font-semibold tracking-tight text-slate-900">{accessDenied ? "Quiz not finished yet" : "Application not found"}</h3>
-						<p class="mt-2 text-sm text-slate-500">
-							{accessDenied ? "Only quiz-completed applications are visible." : "This application is unavailable."}
-						</p>
-					</div>
-					<button onclick={goBack} class="btn btn-primary gap-2 shadow-sm">
-						<ChevronLeft size={18} />
-						Go Back
-					</button>
-				</div>
-			</div>
-		{:else if isFinishedQuiz()}
-			<!-- Header bar -->
-			<div class="mb-5 flex items-center justify-between gap-3 rounded-3xl border border-white/70 bg-white/80 px-5 py-4 shadow-sm backdrop-blur">
-				<button onclick={goBack} class="btn btn-ghost btn-sm gap-2 text-slate-600 hover:text-slate-900">
-					<ChevronLeft size={18} />
-					Back to Applications
-				</button>
-				<span class="badge {statusBadgeClass(application.Status || application.status)} badge-lg border-none px-4 py-3 font-medium capitalize">
-					{application.Status || application.status || "unknown"}
-				</span>
-			</div>
+<div class="min-h-screen bg-gray-50">
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
-			<div class="grid gap-6 xl:grid-cols-12 xl:items-start">
-				<!-- Left panel -->
-				<div class="space-y-6 xl:col-span-8">
-					<!-- Applicant hero -->
-					<section class="min-w-0 overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-						<div class="bg-gradient-to-r from-purple-600 via-violet-600 to-blue-600 px-6 py-8 text-white sm:px-8">
-							<div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-								<div class="flex-1 space-y-4">
-									<div class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/20">
-										<BrainCircuit size={14} />
-										Application
-									</div>
-									<h1 class="break-words text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
-										{getVal(application, "Name", "name", "ApplicantName", "applicant_name") || getVal(application, "GithubUsername_2", "GithubUsername", "github_username") || "Applicant"}
-									</h1>
-									<p class="max-w-2xl break-words text-sm text-white/80 sm:text-base">
-										Applied: {formatDate(application.SubmittedAt || application.submitted_at)}
-									</p>
-								</div>
-								<div class="grid w-full min-w-0 gap-3 sm:grid-cols-2">
-									<div class="rounded-2xl bg-white/15 p-4 ring-1 ring-white/15 backdrop-blur-sm">
-										<p class="text-[11px] uppercase tracking-[0.22em] text-white/70">Email</p>
-										<p class="mt-2 break-words text-sm font-medium leading-snug text-white">{getVal(application, "Email", "email", "ApplicantEmail", "applicant_email") || "—"}</p>
-									</div>
-									<div class="rounded-2xl bg-white/15 p-4 ring-1 ring-white/15 backdrop-blur-sm">
-										<p class="text-[11px] uppercase tracking-[0.22em] text-white/70">GitHub</p>
-										<p class="mt-2 break-words text-sm font-medium leading-snug text-white">{getVal(application, "GithubUsername", "github_username", "GithubUsername_2") || "—"}</p>
-									</div>
-									<div class="rounded-2xl bg-white/15 p-4 ring-1 ring-white/15 backdrop-blur-sm">
-										<p class="text-[11px] uppercase tracking-[0.22em] text-white/70">Submitted</p>
-										<p class="mt-2 text-sm font-medium leading-snug text-white">{formatDate(application.SubmittedAt || application.submitted_at)}</p>
-									</div>
-									<div class="rounded-2xl bg-white/15 p-4 ring-1 ring-white/15 backdrop-blur-sm">
-										<p class="text-[11px] uppercase tracking-[0.22em] text-white/70">Status</p>
-										<p class="mt-2 break-words text-sm font-medium leading-snug text-white">{application.Status || application.status || "unknown"}</p>
-									</div>
-								</div>
-							</div>
-						</div>
+        {#if loading}
+            <div class="space-y-6">
+                <!-- Skeleton: Top bar -->
+                <div class="flex items-center gap-3 animate-pulse">
+                    <div class="w-10 h-10 rounded-lg bg-gray-200"></div>
+                    <div class="h-4 w-32 bg-gray-200 rounded"></div>
+                </div>
+                <!-- Skeleton: Hero card -->
+                <div class="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/50 overflow-hidden">
+                    <div class="h-40 bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 animate-pulse"></div>
+                    <div class="px-6 py-4 bg-gray-50 flex gap-3">
+                        <div class="h-8 w-24 bg-gray-200 rounded-lg"></div>
+                        <div class="h-8 w-24 bg-gray-200 rounded-lg"></div>
+                    </div>
+                </div>
+                <!-- Skeleton: Tabs -->
+                <div class="flex gap-1 bg-white rounded-xl p-1">
+                    <div class="flex-1 h-10 bg-gray-100 rounded-lg"></div>
+                    <div class="flex-1 h-10 bg-gray-100 rounded-lg"></div>
+                    <div class="flex-1 h-10 bg-gray-100 rounded-lg"></div>
+                    <div class="flex-1 h-10 bg-gray-100 rounded-lg"></div>
+                </div>
+                <!-- Skeleton: Content -->
+                <div class="grid gap-6 lg:grid-cols-3">
+                    <div class="space-y-4 animate-pulse">
+                        <div class="h-24 bg-white rounded-2xl ring-1 ring-gray-200/50"></div>
+                        <div class="h-24 bg-white rounded-2xl ring-1 ring-gray-200/50"></div>
+                    </div>
+                    <div class="space-y-4 animate-pulse lg:col-span-2">
+                        <div class="h-32 bg-white rounded-2xl ring-1 ring-gray-200/50"></div>
+                        <div class="h-48 bg-white rounded-2xl ring-1 ring-gray-200/50"></div>
+                    </div>
+                </div>
+            </div>
 
-						<div class="p-4">
-							<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-								{#if getVal(application, "PhoneNumber", "phone_number")}
-									<div class="rounded-2xl border border-slate-200/80 bg-slate-50 p-4">
-										<p class="text-[11px] uppercase tracking-[0.22em] text-slate-500">Phone</p>
-										<p class="mt-2 break-words text-sm font-medium leading-snug text-slate-900">{getVal(application, "PhoneNumber", "phone_number")}</p>
-									</div>
-								{/if}
-								{#if getVal(application, "Location", "location")}
-									<div class="rounded-2xl border border-slate-200/80 bg-slate-50 p-4">
-										<p class="text-[11px] uppercase tracking-[0.22em] text-slate-500">Location</p>
-										<p class="mt-2 break-words text-sm font-medium leading-snug text-slate-900">{getVal(application, "Location", "location")}</p>
-									</div>
-								{/if}
-							</div>
+        {:else if !application || accessDenied}
+            <div class="flex min-h-[60vh] items-center justify-center">
+                <div class="text-center max-w-md">
+                    <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+                        <BrainCircuit size={32} class="text-gray-400" />
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-900">
+                        {accessDenied ? "Quiz Not Completed" : "Application Not Found"}
+                    </h3>
+                    <p class="mt-2 text-sm text-gray-500">
+                        {accessDenied
+                            ? "This application hasn't completed the quiz yet. Only quiz-completed applications are visible."
+                            : "The application you're looking for doesn't exist or has been removed."}
+                    </p>
+                    <button onclick={goBack} class="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                        <ChevronLeft size={16} />
+                        Back to Applications
+                    </button>
+                </div>
+            </div>
 
-							{#if application.QuizScore != null || application.quiz_score != null}
-								<div class="mt-6 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-purple-50 via-white to-blue-50 p-5 sm:p-6">
-									<div class="mb-4 flex items-center justify-between">
-										<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Quiz Results</h2>
-										<PassFailBadge score={getVal(application, 'QuizScore', 'quiz_score') || 0} passingThreshold={50} />
-									</div>
-									<div class="grid gap-4 md:grid-cols-2">
-										<div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-											<p class="text-xs uppercase tracking-[0.22em] text-slate-500">Score</p>
-											<p class="mt-3 text-4xl font-semibold text-slate-900">{getVal(application, "QuizScore", "quiz_score")}<span class="text-xl text-slate-400">/100</span></p>
-										</div>
-										<div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
-											<p class="text-xs uppercase tracking-[0.22em] text-slate-500">Verdict</p>
-											<p class="mt-3 text-sm text-slate-600">{getVal(application, 'QuizPassed', 'quiz_passed') ? 'Passed screening.' : 'Did not pass screening.'}</p>
-										</div>
-									</div>
-								</div>
-							{/if}
+        {:else if isFinishedQuiz()}
 
-							{#if getVal(application, "CoverLetter", "cover_letter", "CoverLetterText", "cover_letter_text")}
-								<div class="mt-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6">
-									<div class="mb-4 flex items-center gap-2">
-										<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Cover Letter</h2>
-									</div>
-									<div class="rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700 whitespace-pre-wrap break-words ring-1 ring-slate-200">
-										{getVal(application, "CoverLetter", "cover_letter", "CoverLetterText", "cover_letter_text")}
-									</div>
-								</div>
-							{/if}
+        <!-- Top Navigation Bar -->
+        <div class="mb-6 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <button
+                    onclick={goBack}
+                    class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                    title="Back"
+                >
+                    <ChevronLeft size={20} />
+                </button>
+                <div class="h-6 w-px bg-gray-200"></div>
+                <div>
+                    <h1 class="text-lg font-semibold text-gray-900">Application Review</h1>
+                    <p class="text-xs text-gray-400">ID: #{getApplicationId()?.slice(0, 8)}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium capitalize
+                    {statusBadgeClass(application.Status || application.status)}">
+                    {application.Status || application.status || "unknown"}
+                </span>
+            </div>
+        </div>
 
-							<div class="mt-6 rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6">
-								<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Links & Resources</h2>
-								<div class="mt-4 flex flex-wrap gap-3">
-									{#if getVal(application, "GithubUsername", "github_username", "GithubUsername_2")}
-										<a
-											href="https://github.com/{getVal(application, 'GithubUsername', 'github_username', 'GithubUsername_2')}"
-											target="_blank"
-											rel="noopener noreferrer"
-											class="btn btn-outline gap-2"
-										>
-											<ExternalLink size={16} />
-											GitHub Profile
-										</a>
-									{/if}
-									{#if getVal(application, "PortfolioUrl", "portfolio_url", "PortfolioURL", "portfolioUrl")}
-										<a
-											href={getVal(application, "PortfolioUrl", "portfolio_url", "PortfolioURL", "portfolioUrl")}
-											target="_blank"
-											rel="noopener noreferrer"
-											class="btn btn-outline gap-2"
-										>
-											<ExternalLink size={16} />
-											Portfolio
-										</a>
-									{/if}
-								</div>
-							</div>
-						</div>
-					</section>
+        <!-- Applicant Profile Card (Hero) -->
+        <div class="mb-6 overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-gray-200/50">
+            <div class="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 px-6 py-8 sm:px-8 overflow-hidden">
+                <!-- Decorative circles -->
+                <div class="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-white/5"></div>
+                <div class="absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-white/5"></div>
+                <div class="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-5">
+                        <div class="relative">
+                            <div class="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 text-3xl font-bold text-white ring-4 ring-white/30 shadow-lg">
+                                {applicantInitials}
+                            </div>
+                            {#if applicantScore > 0}
+                                <div class="absolute -bottom-1 -right-1 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-indigo-600 shadow-md">
+                                    {applicantScore}%
+                                </div>
+                            {/if}
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">{applicantName}</h2>
+                            <div class="mt-1 flex flex-wrap items-center gap-3 text-sm text-white/80">
+                                {#if applicantEmail}
+                                    <span class="flex items-center gap-1">
+                                        <Mail size={13} class="text-white/50" />
+                                        {applicantEmail}
+                                    </span>
+                                {/if}
+                                {#if applicantGithub}
+                                    <span class="flex items-center gap-1">
+                                        <GitBranch size={13} class="text-white/50" />
+                                        @{applicantGithub}
+                                    </span>
+                                {/if}
+                                {#if applicantLocation}
+                                    <span class="flex items-center gap-1">
+                                        <MapPin size={13} class="text-white/50" />
+                                        {applicantLocation}
+                                    </span>
+                                {/if}
+                            </div>
+                        </div>
+                    </div>
 
-					<!-- ATS Score card -->
-					{#if loadingIntelligence}
-						<div class="rounded-3xl border border-white/70 bg-white/90 p-8 text-center shadow-sm backdrop-blur">
-							<div class="flex items-center justify-center gap-2 text-sm text-slate-500">
-								<Loader2 size={18} class="animate-spin" />
-								Analyzing resume intelligence...
-							</div>
-						</div>
-					{:else if intelligenceData}
-						{#if atsScore != null}
-							<section class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8 text-left" onclick={() => toggleSection('atsScore')}>
-									<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-										<Target size={14} />
-										ATS Score
-										<span class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-slate-600">weighted</span>
-										<ChevronDown size={16} class="transition-transform duration-200 {openSections.atsScore ? 'rotate-180' : ''}" />
-									</div>
-								</button>
-								{#if openSections.atsScore}
-									<div class="p-6 sm:p-8">
-										<div class="flex items-center gap-6">
-											<span class="text-5xl font-bold tracking-tight text-slate-900">{atsScore}</span>
-											<span class="text-xl font-medium text-slate-400">/ 100</span>
-										</div>
-										{#if scoreBreakdown}
-											<div class="mt-4 flex flex-wrap gap-3">
-												{#if scoreBreakdown.clarity != null}
-													<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-														<ShieldCheck size={13} />
-														Clarity: {scoreBreakdown.clarity}
-													</span>
-												{/if}
-												{#if scoreBreakdown.keywords != null}
-													<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-														<BarChart3 size={13} />
-														Keywords: {scoreBreakdown.keywords}
-													</span>
-												{/if}
-												{#if scoreBreakdown.structure != null}
-													<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-														<BookOpen size={13} />
-														Structure: {scoreBreakdown.structure}
-													</span>
-												{/if}
-											</div>
-										{/if}
-									</div>
-								{/if}
-							</section>
-						{/if}
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        <div class="rounded-xl bg-white/15 p-3 backdrop-blur-sm ring-1 ring-white/20">
+                            <p class="text-[10px] uppercase tracking-wider text-white/60">Applied</p>
+                            <p class="mt-1 text-sm font-semibold text-white">{formatDate(applicantSubmitted)}</p>
+                        </div>
+                        <div class="rounded-xl bg-white/15 p-3 backdrop-blur-sm ring-1 ring-white/20">
+                            <p class="text-[10px] uppercase tracking-wider text-white/60">Quiz Score</p>
+                            <p class="mt-1 text-sm font-semibold text-white">{applicantScore}/100</p>
+                        </div>
+                        <div class="rounded-xl bg-white/15 p-3 backdrop-blur-sm ring-1 ring-white/20">
+                            <p class="text-[10px] uppercase tracking-wider text-white/60">ATS Score</p>
+                            <p class="mt-1 text-sm font-semibold text-white">{atsScore ?? "—"}/100</p>
+                        </div>
+                        {#if compositeScore != null}
+                            <div class="rounded-xl p-3 backdrop-blur-sm ring-1 ring-white/20
+                                {compositeScore >= 70 ? 'bg-white/25 ring-emerald-300/30' :
+                                 compositeScore >= 50 ? 'bg-white/20 ring-amber-300/30' : 'bg-white/15 ring-rose-300/30'}">
+                                <p class="text-[10px] uppercase tracking-wider text-white/60">⭐ Overall</p>
+                                <p class="mt-1 text-sm font-bold text-white">{compositeScore}/100</p>
+                            </div>
+                        {/if}
+                    </div>
+                </div>
+            </div>
 
-						<!-- Strengths & Weaknesses -->
-						{#if getStrengths().length > 0 || getWeaknesses().length > 0}
-							<section class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8 text-left" onclick={() => toggleSection('strengths')}>
-									<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-										<Lightbulb size={14} />
-										Strengths & Weaknesses
-										<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.strengths ? 'rotate-180' : ''}" />
-									</div>
-								</button>
-								{#if openSections.strengths}
-									<div class="p-6 sm:p-8">
-										{#if getStrengths().length > 0}
-											<div class="mb-5">
-												<h3 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
-													<Check size={15} />
-													Strengths
-												</h3>
-												<ul class="space-y-2">
-													{#each getStrengths() as s}
-														<li class="flex items-start gap-2 text-sm text-slate-700">
-															<span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center">
-																<Check size={12} class="text-emerald-600" />
-															</span>
-															{s}
-														</li>
-													{/each}
-												</ul>
-											</div>
-										{/if}
-										{#if getWeaknesses().length > 0}
-											<div>
-												<h3 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-red-600">
-													<AlertTriangle size={15} />
-													Weaknesses
-												</h3>
-												<ul class="space-y-2">
-													{#each getWeaknesses() as w}
-														<li class="flex items-start gap-2 text-sm text-slate-700">
-															<span class="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-red-100 flex items-center justify-center">
-																<X size={12} class="text-red-600" />
-															</span>
-															{w}
-														</li>
-													{/each}
-												</ul>
-											</div>
-										{/if}
-									</div>
-								{/if}
-							</section>
-						{/if}
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-gray-50/80 px-6 py-3">
+                <div class="flex flex-wrap items-center gap-3 text-sm">
+                    <span class="text-gray-500">Quick actions:</span>
+                    {#if applicantGithub}
+                        <a href="https://github.com/{applicantGithub}" target="_blank" rel="noopener"
+                           class="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 transition-colors">
+                            <GitBranch size={13} />
+                            GitHub
+                        </a>
+                    {/if}
+                    {#if getVal(application, "PortfolioUrl", "portfolio_url")}
+                        <a href="{getVal(application, 'PortfolioUrl', 'portfolio_url')}" target="_blank" rel="noopener"
+                           class="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 transition-colors">
+                            <ExternalLink size={13} />
+                            Portfolio
+                        </a>
+                    {/if}
+                </div>
+                <div class="flex items-center gap-2">
+                    <button
+                        onclick={rejectApplication}
+                        disabled={isProcessing || (application.Status || application.status) === 'rejected'}
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-red-600 ring-1 ring-red-200 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <X size={14} />
+                        Reject
+                    </button>
+                    <button
+                        onclick={acceptApplication}
+                        disabled={isProcessing || (application.Status || application.status) === 'accepted'}
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Check size={14} />
+                        Accept
+                    </button>
+                </div>
+            </div>
+        </div>
 
-						<!-- Field checks -->
-						{#if checks.length > 0}
-							<section class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 sm:px-8 text-left" onclick={() => toggleSection('fieldChecks')}>
-									<div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-600">
-										<ShieldCheck size={14} />
-										Field Checks
-										<span class="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-slate-600">{checks.length}</span>
-										<ChevronDown size={16} class="transition-transform duration-200 {openSections.fieldChecks ? 'rotate-180' : ''}" />
-									</div>
-								</button>
-								{#if openSections.fieldChecks}
-									<div class="divide-y divide-slate-100 p-2">
-										{#each checks as check}
-											<div class="flex items-start gap-3 px-4 py-3">
-												{#if check.status === "pass"}
-													<span class="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center">
-														<Check size={14} class="text-emerald-600" />
-													</span>
-												{:else if check.status === "warn"}
-													<span class="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-amber-100 flex items-center justify-center">
-														<AlertTriangle size={14} class="text-amber-600" />
-													</span>
-												{:else}
-													<span class="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-red-100 flex items-center justify-center">
-														<X size={14} class="text-red-600" />
-													</span>
-												{/if}
-												<div class="min-w-0 flex-1">
-													<div class="flex items-center gap-2 flex-wrap">
-														<span class="text-sm font-semibold text-slate-800">{check.field || check.label || "—"}</span>
-														<span class="badge badge-sm border-none {check.status === 'pass' ? 'bg-emerald-100 text-emerald-700' : check.status === 'warn' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">
-															{check.status}
-														</span>
-													</div>
-													<p class="mt-0.5 text-xs text-slate-500">{check.message || check.detail || ""}</p>
-												</div>
-											</div>
-										{/each}
-									</div>
-								{/if}
-							</section>
-						{/if}
-					{:else}
-						<div class="rounded-3xl border border-dashed border-slate-200 bg-white/90 p-8 text-center text-sm text-slate-500 shadow-sm backdrop-blur">
-							No intelligence data available.
-						</div>
-					{/if}
-				</div>
+        <!-- Tabs -->
+        <div class="mb-6 flex gap-1 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-gray-200/50">
+            <button
+                class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200
+                    {activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}"
+                onclick={() => activeTab = 'overview'}
+            >
+                <span class="hidden sm:inline">📊 Overview</span>
+                <span class="sm:hidden">📊</span>
+            </button>
+            <button
+                class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200
+                    {activeTab === 'analysis' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}"
+                onclick={() => activeTab = 'analysis'}
+            >
+                <span class="hidden sm:inline">🔍 Analysis</span>
+                <span class="sm:hidden">🔍</span>
+            </button>
+            <button
+                class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200
+                    {activeTab === 'github' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}"
+                onclick={() => activeTab = 'github'}
+            >
+                <span class="hidden sm:inline">🐙 GitHub</span>
+                <span class="sm:hidden">🐙</span>
+            </button>
+            <button
+                class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200
+                    {activeTab === 'quiz' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}"
+                onclick={() => activeTab = 'quiz'}
+            >
+                <span class="hidden sm:inline">📝 Quiz</span>
+                <span class="sm:hidden">📝</span>
+            </button>
+        </div>
 
-				<!-- Right sidebar -->
-				<aside class="min-w-0 space-y-6 xl:col-span-4 xl:sticky xl:top-6 xl:self-start">
-					<!-- Actions -->
-					<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-						<div class="border-b border-slate-200 bg-slate-50 px-6 py-4">
-							<h2 class="text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">Actions</h2>
-						</div>
-						<div class="space-y-3 p-6">
-							<ButtonLoader
-								loading={isProcessing}
-								disabled={isProcessing || (application.Status || application.status) === 'rejected'}
-								onclick={rejectApplication}
-								color="error"
-								variant="outline"
-							>
-								<X size={18} />
-								Reject Application
-							</ButtonLoader>
-							<ButtonLoader
-								loading={isProcessing}
-								disabled={isProcessing || (application.Status || application.status) === 'accepted'}
-								onclick={acceptApplication}
-								color="success"
-							>
-								<Check size={18} />
-								Accept Application
-							</ButtonLoader>
-						</div>
-					</div>
+        <!-- Tab Content -->
+        <div class="grid gap-6 lg:grid-cols-3">
 
-					{#if !loadingIntelligence && intelligenceData}
-						<!-- GitHub profile -->
-						<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-							<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 text-left" onclick={() => toggleSection('githubProfile')}>
-								<div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">
-									<GitBranch size={14} />
-									GitHub Profile
-									<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.githubProfile ? 'rotate-180' : ''}" />
-								</div>
-							</button>
-							{#if openSections.githubProfile}
-								<div class="p-6 space-y-4">
-									<div class="flex items-center justify-between text-sm">
-										<span class="text-slate-500">User</span>
-										<span class="font-semibold text-slate-900">{parsedGithub?.username || ghIntelligence.github_username || getVal(application, "GithubUsername", "github_username", "GithubUsername_2") || "—"}</span>
-									</div>
-									<div class="flex items-center justify-between text-sm">
-										<span class="text-slate-500">Repos</span>
-										<span class="font-semibold text-slate-900">{parsedGithub?.repo_count ?? ghIntelligence.public_repos ?? "—"}</span>
-									</div>
+            <!-- Sidebar (desktop only) -->
+            <div class="hidden lg:block lg:col-span-1 space-y-4">
+                <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                    <p class="text-xs font-medium uppercase tracking-wider text-gray-400">Status</p>
+                    <div class="mt-2 flex items-center gap-2">
+                        <span class="inline-flex h-2.5 w-2.5 rounded-full
+                            {(application.Status || application.status || '').toLowerCase() === 'accepted' ? 'bg-emerald-500' :
+                             (application.Status || application.status || '').toLowerCase() === 'rejected' ? 'bg-red-500' :
+                             'bg-amber-500'}">
+                        </span>
+                        <span class="text-sm font-medium capitalize text-gray-900">
+                            {application.Status || application.status || "unknown"}
+                        </span>
+                    </div>
+                </div>
 
-									<div class="rounded-2xl bg-slate-50 p-4 grid grid-cols-2 gap-3 ring-1 ring-slate-100">
-										<div>
-											<p class="text-[11px] uppercase tracking-wider text-slate-400">Followers</p>
-											<p class="mt-1 text-lg font-bold text-slate-900">{ghIntelligence.followers ?? "—"}</p>
-										</div>
-										<div>
-											<p class="text-[11px] uppercase tracking-wider text-slate-400">Following</p>
-											<p class="mt-1 text-lg font-bold text-slate-900">{ghIntelligence.following ?? "—"}</p>
-										</div>
-										<div>
-											<p class="text-[11px] uppercase tracking-wider text-slate-400">Activity</p>
-											<p class="mt-1 text-sm font-bold capitalize text-slate-900">{ghIntelligence.activity_level || "—"}</p>
-										</div>
-										<div>
-											<p class="text-[11px] uppercase tracking-wider text-slate-400">Focus</p>
-											<p class="mt-1 text-sm font-bold text-slate-900">{ghIntelligence.focus || "—"}</p>
-										</div>
-									</div>
+                <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                    <p class="text-xs font-medium uppercase tracking-wider text-gray-400">Quiz Summary</p>
+                    <div class="mt-3 grid grid-cols-2 gap-3">
+                        <div class="rounded-xl bg-gray-50 p-3 text-center">
+                            <p class="text-lg font-bold text-gray-900">{quizStats.total}</p>
+                            <p class="text-[10px] text-gray-400">Attempts</p>
+                        </div>
+                        <div class="rounded-xl bg-gray-50 p-3 text-center">
+                            <p class="text-lg font-bold text-gray-900">{quizStats.accuracy}%</p>
+                            <p class="text-[10px] text-gray-400">Accuracy</p>
+                        </div>
+                    </div>
+                </div>
 
-									{#if ghLanguages.length > 0}
-										<div>
-											<p class="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Top Languages</p>
-											<div class="flex flex-wrap gap-2">
-												{#each ghLanguages as lang}
-													<span class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-														{getLangName(lang)}
-														{#if getLangPercentage(lang)}
-															<span class="text-slate-400">{getLangPercentage(lang)}%</span>
-														{/if}
-													</span>
-												{/each}
-											</div>
-										</div>
-									{/if}
-								</div>
-							{/if}
-						</div>
+                {#if atsScore != null}
+                    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                        <p class="text-xs font-medium uppercase tracking-wider text-gray-400">ATS Score</p>
+                        <div class="mt-2 flex items-end gap-2">
+                            <span class="text-3xl font-bold text-gray-900">{atsScore}</span>
+                            <span class="text-sm text-gray-400">/100</span>
+                        </div>
+                        <div class="mt-2 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                            <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                                 style="width: {atsScore}%; transition: width 0.6s ease;">
+                            </div>
+                        </div>
+                        {#if scoreBreakdown}
+                            <div class="mt-3 flex flex-wrap gap-1.5">
+                                {#each Object.entries(scoreBreakdown) as [key, value]}
+                                    {#if value != null}
+                                        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                            {key}: {value}
+                                        </span>
+                                    {/if}
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
 
-						<!-- Suggested headline & skills -->
-						{#if suggestedHeadline || suggestedSkills.length > 0 || suggestedEducation.length > 0}
-							<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-								<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 text-left" onclick={() => toggleSection('suggested')}>
-									<div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">
-										<BrainCircuit size={14} />
-										Suggested Headline & Skills
-										<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.suggested ? 'rotate-180' : ''}" />
-									</div>
-								</button>
-								{#if openSections.suggested}
-									<div class="p-6 space-y-5">
-										{#if suggestedHeadline}
-											<div class="rounded-2xl bg-blue-50 p-4 text-sm font-medium text-blue-900 ring-1 ring-blue-100">
-												{suggestedHeadline}
-											</div>
-										{/if}
-										{#if suggestedSkills.length > 0}
-											<div>
-												<p class="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Suggested Skills</p>
-												<div class="flex flex-wrap gap-2">
-													{#each suggestedSkills as skill}
-														<span class="inline-block rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">{skill}</span>
-													{/each}
-												</div>
-											</div>
-										{/if}
-										{#if suggestedEducation.length > 0}
-											<div>
-												<p class="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Education (Extracted)</p>
-												<ul class="space-y-1">
-													{#each suggestedEducation as edu}
-														<li class="flex items-start gap-2 text-sm text-slate-700">
-															<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400"></span>
-															{edu}
-														</li>
-													{/each}
-												</ul>
-											</div>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/if}
+                {#if compositeScore != null}
+                    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                        <p class="text-xs font-medium uppercase tracking-wider text-gray-400">⭐ Overall Rating</p>
+                        <div class="mt-2 flex items-end gap-2">
+                            <span class="text-3xl font-bold text-gray-900">{compositeScore}</span>
+                            <span class="text-sm text-gray-400">/100</span>
+                            <span class="ml-auto rounded-full px-2 py-0.5 text-xs font-bold
+                                {compositeScore >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                                 compositeScore >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}">
+                                {compositeScore >= 70 ? 'Strong' : compositeScore >= 50 ? 'Fair' : 'Weak'}
+                            </span>
+                        </div>
+                        <div class="mt-2 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                            <div class="h-full rounded-full bg-gradient-to-r
+                                {compositeScore >= 70 ? 'from-emerald-500 to-teal-500' :
+                                 compositeScore >= 50 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-500'}"
+                                 style="width: {compositeScore}%; transition: width 0.6s ease;">
+                            </div>
+                        </div>
+                        <p class="mt-2 text-[10px] text-gray-400">80% Quiz · 20% ATS</p>
+                    </div>
+                {/if}
 
-						<!-- Quiz activity -->
-						<div class="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-sm backdrop-blur">
-							<button class="w-full border-b border-slate-200 bg-slate-50 px-6 py-4 text-left" onclick={() => toggleSection('quizActivity')}>
-								<div class="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-600">
-									<Trophy size={14} />
-									Quiz Activity
-									<ChevronDown size={16} class="ml-auto transition-transform duration-200 {openSections.quizActivity ? 'rotate-180' : ''}" />
-								</div>
-							</button>
-							{#if openSections.quizActivity}
-								<div class="p-6">
-									<div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-										<span><span class="font-semibold text-slate-900">Attempts:</span> <span class="text-slate-600">{quizStats.total}</span></span>
-										<span><span class="font-semibold text-slate-900">Correct:</span> <span class="text-slate-600">{quizStats.correct}</span></span>
-										<span><span class="font-semibold text-slate-900">Accuracy:</span> <span class="text-slate-600">{quizStats.accuracy}%</span></span>
-									</div>
-									{#if quizStats.last}
-										<p class="mt-2 text-xs text-slate-400">Last saved: {new Date(quizStats.last).toLocaleString()}</p>
-									{/if}
-								</div>
-							{/if}
-						</div>
+                {#if ghIntelligence && Object.keys(ghIntelligence).length > 0}
+                    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                        <p class="text-xs font-medium uppercase tracking-wider text-gray-400">GitHub</p>
+                        <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+                            <div>
+                                <p class="text-sm font-bold text-gray-900">{ghIntelligence.public_repos ?? "—"}</p>
+                                <p class="text-[10px] text-gray-400">Repos</p>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-900">{ghIntelligence.followers ?? "—"}</p>
+                                <p class="text-[10px] text-gray-400">Followers</p>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold capitalize text-gray-900">{ghIntelligence.activity_level || "—"}</p>
+                                <p class="text-[10px] text-gray-400">Activity</p>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+            </div>
 
-						<p class="text-right text-xs text-slate-400">data from dat.json · ATS v1</p>
-					{/if}
-				</aside>
-			</div>
-		{/if}
-	</div>
+            <!-- Main Content -->
+            <div class="lg:col-span-2 space-y-5">
+
+                <!-- Tab: Overview -->
+                {#if activeTab === 'overview'}
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        {#if applicantEmail}
+                            <div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                    <Mail size={16} class="text-gray-500" />
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">Email</p>
+                                    <p class="mt-0.5 text-sm font-medium text-gray-900 truncate">{applicantEmail}</p>
+                                </div>
+                            </div>
+                        {/if}
+                        {#if applicantPhone}
+                            <div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                    <User size={16} class="text-gray-500" />
+                                </div>
+                                <div>
+                                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">Phone</p>
+                                    <p class="mt-0.5 text-sm font-medium text-gray-900">{applicantPhone}</p>
+                                </div>
+                            </div>
+                        {/if}
+                        {#if applicantLocation}
+                            <div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                    <MapPin size={16} class="text-gray-500" />
+                                </div>
+                                <div>
+                                    <p class="text-[10px] text-gray-400 uppercase tracking-wider">Location</p>
+                                    <p class="mt-0.5 text-sm font-medium text-gray-900">{applicantLocation}</p>
+                                </div>
+                            </div>
+                        {/if}
+                        <div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 flex items-start gap-3 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                <Calendar size={16} class="text-gray-500" />
+                            </div>
+                            <div>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-wider">Submitted</p>
+                                <p class="mt-0.5 text-sm font-medium text-gray-900">{formatDate(applicantSubmitted)}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {#if coverLetter}
+                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                            <div class="flex items-center gap-2">
+                                <FileText size={16} class="text-gray-400" />
+                                <h3 class="text-sm font-semibold text-gray-700">Cover Letter</h3>
+                            </div>
+                            <div class="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">
+                                {coverLetter}
+                            </div>
+                        </div>
+                    {/if}
+                {/if}
+
+                <!-- Tab: Analysis -->
+                {#if activeTab === 'analysis'}
+                    {#if loadingIntelligence}
+                        <div class="flex items-center justify-center rounded-2xl bg-white p-12 shadow-sm ring-1 ring-gray-200/50">
+                            <Loader2 size={24} class="animate-spin text-indigo-600" />
+                            <span class="ml-3 text-sm text-gray-500">Analyzing resume...</span>
+                        </div>
+                    {:else if intelligenceData}
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            {#if getStrengths().length > 0}
+                                <div class="rounded-2xl bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm ring-1 ring-emerald-100/50 transition-all duration-200 hover:shadow-md">
+                                    <div class="flex items-center gap-2 text-emerald-600">
+                                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
+                                            <ThumbsUp size={16} />
+                                        </div>
+                                        <h3 class="text-sm font-semibold">Strengths</h3>
+                                        <span class="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                            {getStrengths().length}
+                                        </span>
+                                    </div>
+                                    <ul class="mt-3 space-y-2">
+                                        {#each getStrengths() as s}
+                                            <li class="flex items-start gap-2.5 text-sm text-gray-700">
+                                                <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400"></span>
+                                                {s}
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                </div>
+                            {/if}
+
+                            {#if getWeaknesses().length > 0}
+                                <div class="rounded-2xl bg-gradient-to-br from-rose-50 to-white p-5 shadow-sm ring-1 ring-rose-100/50 transition-all duration-200 hover:shadow-md">
+                                    <div class="flex items-center gap-2 text-rose-600">
+                                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100">
+                                            <ThumbsDown size={16} />
+                                        </div>
+                                        <h3 class="text-sm font-semibold">Areas to Improve</h3>
+                                        <span class="ml-auto rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">
+                                            {getWeaknesses().length}
+                                        </span>
+                                    </div>
+                                    <ul class="mt-3 space-y-2">
+                                        {#each getWeaknesses() as w}
+                                            <li class="flex items-start gap-2.5 text-sm text-gray-700">
+                                                <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400"></span>
+                                                {w}
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                </div>
+                            {/if}
+                        </div>
+
+                        {#if checks.length > 0}
+                            <div class="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/50 overflow-hidden">
+                                <div class="border-b border-gray-100 px-5 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <ShieldCheck size={16} class="text-gray-400" />
+                                        <h3 class="text-sm font-semibold text-gray-700">Field Validation</h3>
+                                        <span class="ml-auto flex items-center gap-1.5 text-xs">
+                                            <span class="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">
+                                                ✅ {checks.filter(c => c.status === 'pass').length}
+                                            </span>
+                                            <span class="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">
+                                                ⚠️ {checks.filter(c => c.status === 'warn').length}
+                                            </span>
+                                            <span class="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">
+                                                ❌ {checks.filter(c => c.status === 'fail').length}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="divide-y divide-gray-100">
+                                    {#each checks as check}
+                                        <div class="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+                                            <div class="mt-0.5 shrink-0">
+                                                {#if check.status === "pass"}
+                                                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                                                        <Check size={12} />
+                                                    </span>
+                                                {:else if check.status === "warn"}
+                                                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                                        <AlertTriangle size={12} />
+                                                    </span>
+                                                {:else}
+                                                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                                                        <X size={12} />
+                                                    </span>
+                                                {/if}
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-sm font-medium text-gray-800">{check.field || check.label || "—"}</p>
+                                                <p class="text-xs text-gray-500">{check.message || check.detail || ""}</p>
+                                            </div>
+                                            <span class="text-[10px] font-medium capitalize text-gray-400">{check.status}</span>
+                                        </div>
+                                    {/each}
+                                </div>
+                            </div>
+                        {/if}
+
+                        {#if suggestedHeadline || suggestedSkills.length > 0 || suggestedEducation.length > 0}
+                            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                                <div class="flex items-center gap-2">
+                                    <Sparkles size={16} class="text-purple-500" />
+                                    <h3 class="text-sm font-semibold text-gray-700">AI Suggestions</h3>
+                                </div>
+
+                                {#if suggestedHeadline}
+                                    <div class="mt-3 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 p-3 text-sm font-medium text-purple-900">
+                                        💡 {suggestedHeadline}
+                                    </div>
+                                {/if}
+
+                                {#if suggestedSkills.length > 0}
+                                    <div class="mt-3">
+                                        <p class="text-xs text-gray-400">Suggested Skills</p>
+                                        <div class="mt-1.5 flex flex-wrap gap-1.5">
+                                            {#each suggestedSkills as skill}
+                                                <span class="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700">
+                                                    {skill}
+                                                </span>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+
+                                {#if suggestedEducation.length > 0}
+                                    <div class="mt-3">
+                                        <p class="text-xs text-gray-400">Extracted Education</p>
+                                        <ul class="mt-1.5 space-y-1">
+                                            {#each suggestedEducation as edu}
+                                                <li class="flex items-start gap-2 text-sm text-gray-600">
+                                                    <span class="mt-1 text-gray-400">📚</span>
+                                                    {edu}
+                                                </li>
+                                            {/each}
+                                        </ul>
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
+                    {:else}
+                        <div class="rounded-2xl bg-white p-12 text-center shadow-sm ring-1 ring-gray-200/50">
+                            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
+                                <BrainCircuit size={28} class="text-gray-300" />
+                            </div>
+                            <h3 class="text-sm font-semibold text-gray-700">No analysis data</h3>
+                            <p class="mt-1 text-xs text-gray-400 max-w-xs mx-auto">Resume intelligence data hasn't been generated for this applicant yet.</p>
+                        </div>
+                    {/if}
+                {/if}
+
+                <!-- Tab: GitHub -->
+                {#if activeTab === 'github'}
+                    {#if loadingIntelligence}
+                        <div class="flex items-center justify-center rounded-2xl bg-white p-12 shadow-sm ring-1 ring-gray-200/50">
+                            <Loader2 size={24} class="animate-spin text-indigo-600" />
+                            <span class="ml-3 text-sm text-gray-500">Loading GitHub data...</span>
+                        </div>
+                    {:else if ghIntelligence && Object.keys(ghIntelligence).length > 0}
+                        <div class="space-y-4">
+                            <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100">
+                                            <GitBranch size={16} class="text-gray-600" />
+                                        </div>
+                                        <h3 class="text-sm font-semibold text-gray-700">GitHub Profile</h3>
+                                    </div>
+                                    {#if applicantGithub}
+                                        <a href="https://github.com/{applicantGithub}" target="_blank" rel="noopener"
+                                           class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                                            View profile
+                                            <ExternalLink size={12} />
+                                        </a>
+                                    {/if}
+                                </div>
+
+                                <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                    <div class="rounded-xl bg-gray-50 p-3 text-center">
+                                        <p class="text-xl font-bold text-gray-900">{ghIntelligence.public_repos ?? "—"}</p>
+                                        <p class="text-[10px] text-gray-400">Repos</p>
+                                    </div>
+                                    <div class="rounded-xl bg-gray-50 p-3 text-center">
+                                        <p class="text-xl font-bold text-gray-900">{ghIntelligence.followers ?? "—"}</p>
+                                        <p class="text-[10px] text-gray-400">Followers</p>
+                                    </div>
+                                    <div class="rounded-xl bg-gray-50 p-3 text-center">
+                                        <p class="text-xl font-bold text-gray-900">{ghIntelligence.following ?? "—"}</p>
+                                        <p class="text-[10px] text-gray-400">Following</p>
+                                    </div>
+                                    <div class="rounded-xl bg-gray-50 p-3 text-center">
+                                        <p class="text-sm font-bold capitalize text-gray-900">{ghIntelligence.activity_level || "—"}</p>
+                                        <p class="text-[10px] text-gray-400">Activity</p>
+                                    </div>
+                                </div>
+
+                                {#if ghIntelligence.focus}
+                                    <div class="mt-3 rounded-xl bg-blue-50 p-3 flex items-center gap-2 border border-blue-100">
+                                        <span class="text-blue-500 text-sm">🎯</span>
+                                        <div>
+                                            <p class="text-[10px] text-blue-400 uppercase tracking-wider">Primary Focus</p>
+                                            <p class="text-sm font-medium text-blue-900">{ghIntelligence.focus}</p>
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+
+                            {#if ghLanguages.length > 0}
+                                <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                                    <p class="text-xs font-medium uppercase tracking-wider text-gray-400">Top Languages</p>
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        {#each ghLanguages as lang}
+                                            {@const name = getLangName(lang)}
+                                            {@const pct = getLangPercentage(lang)}
+                                            <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700">
+                                                <span class="h-2 w-2 rounded-full"
+                                                      style="background: {['#f1e05a', '#3178c6', '#563d7c', '#e34c26', '#2b7489'][ghLanguages.indexOf(lang) % 5]}">
+                                                </span>
+                                                {name}
+                                                {#if pct}
+                                                    <span class="text-xs text-gray-400">{pct}%</span>
+                                                {/if}
+                                            </span>
+                                        {/each}
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+                    {:else}
+                        <div class="rounded-2xl bg-white p-12 text-center shadow-sm ring-1 ring-gray-200/50">
+                            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
+                                <GitBranch size={28} class="text-gray-300" />
+                            </div>
+                            <h3 class="text-sm font-semibold text-gray-700">No GitHub data</h3>
+                            <p class="mt-1 text-xs text-gray-400">GitHub intelligence hasn't been collected for this applicant.</p>
+                            {#if applicantGithub}
+                                <a href="https://github.com/{applicantGithub}" target="_blank" rel="noopener"
+                                   class="mt-3 inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                                    Visit @{applicantGithub} →
+                                </a>
+                            {/if}
+                        </div>
+                    {/if}
+                {/if}
+
+                <!-- Tab: Quiz -->
+                {#if activeTab === 'quiz'}
+                    <div class="space-y-4">
+                        <!-- Score Card with Circular Progress -->
+                        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200/50">
+                            <div class="flex flex-col sm:flex-row items-center gap-6">
+                                <div class="relative">
+                                    <svg class="w-28 h-28 -rotate-90">
+                                        <circle cx="56" cy="56" r="48" fill="none" stroke="#f3f4f6" stroke-width="8"/>
+                                        <circle cx="56" cy="56" r="48" fill="none"
+                                            stroke="{applicantScore >= 70 ? '#10b981' : applicantScore >= 50 ? '#f59e0b' : '#ef4444'}"
+                                            stroke-width="8"
+                                            stroke-dasharray="{2 * Math.PI * 48 * (applicantScore/100)} {2 * Math.PI * 48 * (1 - applicantScore/100)}"
+                                            stroke-linecap="round"
+                                            class="transition-all duration-1000"/>
+                                    </svg>
+                                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                        <span class="text-2xl font-bold text-gray-900">{applicantScore}</span>
+                                        <span class="text-[10px] text-gray-400">/ 100</span>
+                                    </div>
+                                </div>
+                                <div class="text-center sm:text-left">
+                                    <h3 class="text-lg font-bold text-gray-900">Quiz Score</h3>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <span class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold
+                                            {applicantScore >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                                             applicantScore >= 50 ? 'bg-amber-100 text-amber-700' :
+                                             'bg-rose-100 text-rose-700'}">
+                                            {applicantScore >= 70 ? '✅ Passed' :
+                                             applicantScore >= 50 ? '⚠️ Marginal' :
+                                             '❌ Failed'}
+                                        </span>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-400">
+                                        {applicantScore >= 70 ? 'Strong performance — recommended for next stage' :
+                                         applicantScore >= 50 ? 'Moderate performance — review recommended' :
+                                         'Below threshold — may need additional screening'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats Grid -->
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 text-center">
+                                <div class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50">
+                                    <Trophy size={18} class="text-indigo-500" />
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900">{quizStats.total}</p>
+                                <p class="text-[10px] text-gray-400 mt-0.5">Questions</p>
+                            </div>
+                            <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 text-center">
+                                <div class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+                                    <Check size={18} class="text-emerald-500" />
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900">{quizStats.correct}</p>
+                                <p class="text-[10px] text-gray-400 mt-0.5">Correct</p>
+                            </div>
+                            <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50 text-center">
+                                <div class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50">
+                                    <BarChart3 size={18} class="text-purple-500" />
+                                </div>
+                                <p class="text-2xl font-bold text-gray-900">{quizStats.accuracy}%</p>
+                                <p class="text-[10px] text-gray-400 mt-0.5">Accuracy</p>
+                            </div>
+                        </div>
+
+                        {#if quizStats.last}
+                            <div class="rounded-2xl bg-white px-5 py-3 shadow-sm ring-1 ring-gray-200/50">
+                                <p class="text-xs text-gray-400">
+                                    📅 Last activity: {new Date(quizStats.last).toLocaleString()}
+                                </p>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+        </div>
+
+        {/if}
+    </div>
 </div>
+
+<style>
+    /* Tab content fade-in */
+    :global(.tab-fade-in) {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Score ring animation */
+    :global(.score-ring-animate) {
+        animation: ringGrow 1.2s ease-out forwards;
+    }
+
+    @keyframes ringGrow {
+        from {
+            stroke-dasharray: 0 302;
+        }
+    }
+
+    /* Smooth scrollbar */
+    :global(.custom-scrollbar::-webkit-scrollbar) {
+        width: 4px;
+    }
+    :global(.custom-scrollbar::-webkit-scrollbar-track) {
+        background: transparent;
+    }
+    :global(.custom-scrollbar::-webkit-scrollbar-thumb) {
+        background: #d1d5db;
+        border-radius: 9999px;
+    }
+    :global(.custom-scrollbar::-webkit-scrollbar-thumb:hover) {
+        background: #9ca3af;
+    }
+</style>
