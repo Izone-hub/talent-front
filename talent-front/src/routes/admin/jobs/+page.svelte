@@ -21,11 +21,14 @@
         Send,
         Archive,
         Ban,
+        Sparkles,
+        Loader2,
     } from "lucide-svelte";
     import PageLoader from "$lib/components/ui/PageLoader.svelte";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import { showToast } from "$lib/stores/toast";
     import { goto } from "$app/navigation";
+    import { questionGenerationService } from "$lib/api/questionGeneration.service";
     import JobDetailModal from "$lib/components/modals/admin/jobs/job-detail.svelte";
 
     let jobs = $state([]);
@@ -35,6 +38,7 @@
     let searchQuery = $state("");
     let expandedStatuses = $state(new Set(["published", "draft"]));
     let expandedCategories = $state(new Set());
+    let generatingJobId = $state(null);
 
     const statusOrder = ["published", "draft", "closed", "archived"];
 
@@ -150,6 +154,36 @@
     function openJobDetail(job) {
         selectedJob = job;
         isDetailModalOpen = true;
+    }
+
+    async function generateQuestionsForJob(job) {
+        const tags = (job.tags || []).map(t => t.name || t.Name || t).filter(Boolean);
+        const title = job.title || "this role";
+        const description = job.description || "";
+        const requirements = job.requirements || "";
+
+        const prompt = `Generate interview questions for a ${title} position.` +
+            (tags.length > 0 ? `\n\nKey skills/tags: ${tags.join(', ')}.` : '') +
+            (description ? `\n\nJob description: ${description.slice(0, 500)}` : '') +
+            (requirements ? `\n\nRequirements: ${requirements.slice(0, 500)}` : '') +
+            `\n\nGenerate a mix of multiple_choice and coding_challenge questions covering the key skills. Include questions of varying difficulty (easy, medium, hard).`;
+
+        generatingJobId = job.id;
+        try {
+            const result = await questionGenerationService.generate(prompt);
+            const count = Array.isArray(result?.questions) ? result.questions.length : 0;
+            if (count > 0) {
+                showToast(`Generated ${count} questions for "${title}"`, "success");
+            } else if (result?.response) {
+                showToast(`Questions generated for "${title}" — check the Questions page`, "success");
+            } else {
+                showToast(`Questions generated for "${title}"`, "success");
+            }
+        } catch (error) {
+            showToast(error.message || "Failed to generate questions", "error");
+        } finally {
+            generatingJobId = null;
+        }
     }
 
     async function updateJobStatus(id, action) {
@@ -312,6 +346,21 @@
                                                                     {#if job.status?.toLowerCase() !== "archived"}
                                                                         <li><button onclick={() => updateJobStatus(job.id, "archive")} class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"><Archive size={14} /> Archive</button></li>
                                                                     {/if}
+                                                                    <li class="border-t border-gray-100 mt-1 pt-1">
+                                                                        <button
+                                                                            onclick={() => generateQuestionsForJob(job)}
+                                                                            disabled={generatingJobId === job.id}
+                                                                            class="flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                        >
+                                                                            {#if generatingJobId === job.id}
+                                                                                <Loader2 size={14} class="animate-spin" />
+                                                                                Generating...
+                                                                            {:else}
+                                                                                <Sparkles size={14} />
+                                                                                Generate Questions
+                                                                            {/if}
+                                                                        </button>
+                                                                    </li>
                                                                 </ul>
                                                             </div>
                                                         </div>

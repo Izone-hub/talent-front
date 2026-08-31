@@ -19,7 +19,7 @@
     import { jobService } from "$lib/api/job.service";
     import { jobDescriptionService } from "$lib/api/jobDescription.service";
     import { showToast } from "$lib/stores/toast";
-    import { companySettings } from "$lib/stores/companySettings";
+    import { settingsService } from "$lib/api/settings.service";
 
     let {
         isOpen = false,
@@ -287,13 +287,16 @@
         }
     }
 
-    function submit(e) {
+    async function submit(e) {
         e.preventDefault();
         if (!validateStep(currentStep)) return;
 
         let settings = {};
-        const unsub = companySettings.subscribe((v) => (settings = v));
-        unsub();
+        try {
+            settings = await settingsService.getCompanySettings();
+        } catch (err) {
+            console.error('Failed to load company settings:', err);
+        }
 
         const payload = { ...jobData };
         payload.company = settings.company_name || "";
