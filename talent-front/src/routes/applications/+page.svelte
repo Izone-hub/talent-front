@@ -1,5 +1,6 @@
 <script>
     import { goto } from "$app/navigation";
+    import { page } from "$app/stores";
     import { auth } from "$lib/stores/authStore";
     import { applicationService } from "$lib/api/application.service";
     import { jobService } from "$lib/api/job.service";
@@ -139,12 +140,15 @@
     }
 
     $effect(() => {
+        // Track route so data reloads on every navigation to this page
+        const _route = $page.url.pathname;
         if ($auth.loading) return;
         if (!$auth.isAuthenticated) {
             showToast("Please login to view your applications", "warning");
             goto("/auth");
             return;
         }
+        isLoading = true;
         loadApplications();
     });
 

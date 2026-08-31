@@ -162,7 +162,7 @@
 					{/if}
 					{#if formatted.salary_min || formatted.salary_max}
 						<span class="badge badge-info">
-							{formatted.salary_currency || 'USD'}
+							{formatted.salary_currency || 'ETB'}
 							{formatted.salary_min?.toLocaleString() || '?'} - {formatted.salary_max?.toLocaleString() || '?'}
 						</span>
 					{/if}
