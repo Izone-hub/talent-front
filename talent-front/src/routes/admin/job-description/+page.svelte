@@ -2,7 +2,7 @@
 	import { Sparkles, Copy, Check, RotateCcw } from 'lucide-svelte';
 	import { jobDescriptionService } from '$lib/api/jobDescription.service';
 	import { showToast } from '$lib/stores/toast';
-	import PageLoader from '$lib/components/ui/PageLoader.svelte';
+	import AdminPageHeader from '$lib/components/ui/AdminPageHeader.svelte';
 
 	let prompt = $state('');
 	let companyName = $state('');
@@ -62,18 +62,11 @@
 	}
 </script>
 
-<div class="space-y-8 max-w-4xl mx-auto">
-	<!-- Header -->
-	<div class="flex items-center justify-between">
-		<div>
-			<h1 class="text-xl font-semibold text-gray-900 tracking-tight">
-				Job Description Generator
-			</h1>
-			<p class="text-gray-500 mt-1 text-sm">
-				Generate AI-powered job descriptions for your open positions.
-			</p>
-		</div>
-	</div>
+<div class="space-y-6 max-w-full mx-auto">
+	<AdminPageHeader
+		title="Job Description Generator"
+		subtitle="Generate AI-powered job descriptions for your open positions."
+	/>
 
 	<!-- Form -->
 	<div class="bg-white rounded-lg border border-gray-100 p-6 space-y-4">

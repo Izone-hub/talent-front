@@ -1,8 +1,9 @@
 <script>
     import { Plus, Edit, Trash2, Briefcase, HelpCircle, ArrowLeft, X, Search } from "lucide-svelte";
     import { tagService } from "$lib/api/tag.service";
-    import PageLoader from "$lib/components/ui/PageLoader.svelte";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
+    import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";
+    import AdminTagsSkeleton from "$lib/components/ui/skeletons/AdminTagsSkeleton.svelte";
     import CreateTagModal from "$lib/components/modals/admin/tag/createTag.svelte";
     import EditTagModal from "$lib/components/modals/admin/tag/editTag.svelte";
     import DeleteConfirmationModal from "$lib/components/modals/admin/tag/deletComfirmation.svelte";
@@ -95,16 +96,12 @@
 </script>
 
 <div class="space-y-6 max-w-full mx-auto">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Tags</h1>
-            <p class="text-gray-500 mt-0.5 text-sm">
-                {tags.length} tags — click one to see linked questions & jobs
-            </p>
-        </div>
+    <AdminPageHeader
+        title="Tags"
+        subtitle={loading ? null : `${tags.length} tags — click one to see linked questions & jobs`}
+    >
         <CreateTagModal onSuccess={loadTags} />
-    </div>
+    </AdminPageHeader>
 
     {#if selectedTag}
         <!-- Detail View -->
@@ -177,8 +174,18 @@
 
             <!-- Content -->
             {#if detailLoading}
-                <div class="flex items-center justify-center py-12">
-                    <span class="loading loading-spinner loading-md text-purple-600"></span>
+                <div class="space-y-3">
+                    {#each Array(3) as _}
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 animate-pulse">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0 flex-1 space-y-2">
+                                    <div class="h-4 bg-gray-100 rounded w-3/4"></div>
+                                    <div class="h-3 bg-gray-50 rounded w-1/2"></div>
+                                </div>
+                                <div class="h-5 bg-gray-100 rounded-full w-16 shrink-0"></div>
+                            </div>
+                        </div>
+                    {/each}
                 </div>
             {:else if detailTab === "jobs"}
                 {#if tagJobs.length === 0}
@@ -258,7 +265,7 @@
     {:else}
         <!-- Tag Grid View -->
         {#if loading}
-            <PageLoader message="Loading tags..." />
+            <AdminTagsSkeleton />
         {:else if tags.length === 0}
             <EmptyState title="No tags yet" description="Create your first tag to get started" />
         {:else}

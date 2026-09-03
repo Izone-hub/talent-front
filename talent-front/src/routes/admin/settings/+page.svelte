@@ -1,7 +1,9 @@
 <script>
-    import { Building2, Globe, MapPin, Image, Save, RotateCcw, Loader2 } from "lucide-svelte";
+    import { Building2, Globe, MapPin, Image, Save, RotateCcw } from "lucide-svelte";
     import { settingsService } from "$lib/api/settings.service";
     import { showToast } from "$lib/stores/toast";
+    import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";
+    import AdminSettingsSkeleton from "$lib/components/ui/skeletons/AdminSettingsSkeleton.svelte";
 
     let formData = $state({
         company_name: "",
@@ -65,20 +67,14 @@
     }
 </script>
 
-<div class="space-y-8 max-w-2xl mx-auto">
-    <!-- Header -->
-    <div>
-        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Settings</h1>
-        <p class="text-gray-500 mt-1 text-sm">
-            Company info used automatically when posting jobs.
-        </p>
-    </div>
+<div class="space-y-6 max-w-full mx-auto">
+    <AdminPageHeader
+        title="Settings"
+        subtitle="Company info used automatically when posting jobs."
+    />
 
     {#if loading}
-        <div class="flex items-center justify-center py-12">
-            <Loader2 size={24} class="animate-spin text-purple-600" />
-            <span class="ml-2 text-gray-500">Loading settings...</span>
-        </div>
+        <AdminSettingsSkeleton />
     {:else}
         <!-- Form Card -->
         <div class="bg-white rounded-xl border border-gray-100 p-8 space-y-6">
@@ -181,7 +177,7 @@
                 disabled={saving}
             >
                 {#if saving}
-                    <Loader2 size={16} class="animate-spin" />
+                    <span class="loading loading-spinner loading-sm"></span>
                     Saving...
                 {:else}
                     <Save size={16} />
