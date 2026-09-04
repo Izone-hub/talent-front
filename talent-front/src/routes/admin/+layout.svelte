@@ -1,7 +1,6 @@
 <script>
     import { auth } from "$lib/stores/authStore";
     import { goto } from "$app/navigation";
-    import { onMount } from "svelte";
     import AuthErrorModal from "$lib/components/modals/AuthErrorModal.svelte";
 
     let showModal = false;
@@ -11,7 +10,6 @@
         goto("/");
     }
 
-    // Reactive check for auth status
     $: {
         if (!$auth.loading) {
             if (!$auth.isAuthenticated || $auth.user?.role !== "admin") {
@@ -32,11 +30,8 @@
 {:else if $auth.isAuthenticated && $auth.user?.role === "admin"}
     <slot />
 {:else}
-    <!-- Hidden content for unauthorized users -->
     <div class="flex h-[60vh] flex-col items-center justify-center space-y-4">
         <div class="loading loading-dots loading-md text-gray-300"></div>
-        <p class="text-sm font-medium text-gray-400">
-            Verifying permissions...
-        </p>
+        <p class="text-sm font-medium text-gray-400">Verifying permissions...</p>
     </div>
 {/if}

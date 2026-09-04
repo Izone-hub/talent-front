@@ -27,6 +27,7 @@
     import { surveyService } from "$lib/api/survey.service";
     import { showToast } from "$lib/stores/toast";
     import { settingsService } from "$lib/api/settings.service";
+    import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";
 
     let currentStep = $state(1);
     const totalSteps = 6;
@@ -522,31 +523,22 @@
     <title>Post a Job | Admin</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-    <div class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <!-- Header -->
-        <div class="mb-8">
-            <button
-                class="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 mb-4 transition-colors"
-                onclick={() => goto("/admin/jobs")}
-            >
-                <BackIcon size={16} />
-                Back to Jobs
-            </button>
-            <div class="bg-gradient-to-r from-purple-600 to-purple-700 rounded-2xl px-8 py-6 text-white">
-                <div class="inline-flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1 text-xs font-semibold mb-2">
-                    <Zap size={12} />
-                    Post a Job
-                </div>
-                <h1 class="text-2xl font-bold">Find Your Next Great Hire</h1>
-                <p class="text-purple-200 text-sm mt-1">
-                    Create a compelling job posting that attracts top talent
-                </p>
-            </div>
-        </div>
+<div class="space-y-6 max-w-full mx-auto">
+    <AdminPageHeader
+        title="Post a Job"
+        subtitle="Create a compelling job posting that attracts top talent"
+    >
+        <button
+            class="btn btn-sm bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 gap-2 rounded-xl"
+            onclick={() => goto("/admin/jobs")}
+        >
+            <BackIcon size={14} />
+            Back to Jobs
+        </button>
+    </AdminPageHeader>
 
-        <!-- Step Progress -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 pt-6 pb-4 mb-6">
+    <!-- Step Progress -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 pt-6 pb-4 mb-6 max-w-4xl mx-auto">
             <div class="flex items-center justify-between relative">
                 <div class="absolute top-5 left-8 right-8 h-0.5 bg-slate-200 z-0"></div>
                 <div
@@ -589,8 +581,8 @@
             </div>
         </div>
 
-        <!-- Form Content -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-8">
+    <!-- Form Content -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-8 max-w-4xl mx-auto">
             <form onsubmit={submit}>
                 <!-- Step 1: Category -->
                 {#if currentStep === 1}
@@ -1194,8 +1186,8 @@
             </form>
         </div>
 
-        <!-- Footer Navigation -->
-        <div class="mt-6 flex items-center justify-between">
+    <!-- Footer Navigation -->
+    <div class="mt-6 flex items-center justify-between">
             <div class="flex items-center gap-2 text-xs text-slate-400">
                 {#if currentStep < totalSteps}
                     <div class="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
@@ -1246,7 +1238,6 @@
                     </button>
                 {/if}
             </div>
-        </div>
     </div>
 </div>
 

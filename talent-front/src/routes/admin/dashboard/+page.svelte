@@ -3,96 +3,78 @@
     import { dashboardService } from "$lib/api/dashboard.service";
     import { formatRelativeTime } from "$lib/utils/dateFormatter";
     import { onMount } from "svelte";
+    import {
+        Users,
+        Briefcase,
+        FileText,
+        Clock,
+        TrendingUp,
+        Inbox,
+        RefreshCw,
+        BarChart3,
+        Activity,
+    } from "lucide-svelte";
+    import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";
+    import AdminDashboardSkeleton from "$lib/components/ui/skeletons/AdminDashboardSkeleton.svelte";
 
-    let stats = $state({
-        total_users: 0,
-        active_jobs: 0,
-        pending_applications: 0,
-        total_applications: 0,
-        new_users_today: 0,
-        new_applications_today: 0,
-    });
+    let dashboard = $state(null);
     let loading = $state(true);
+
+    // Recent activity pagination
     let activity = $state([]);
-    let activityLoading = $state(true);
-    let activityError = $state("");
-    let page = $state(1);
-    let totalPages = $state(0);
+    let activityPagination = $state(null);
+    let activityLoading = $state(false);
+    let initialActivityLength = $state(0);
+    let initialPagination = $state(null);
 
-    async function loadActivity(p) {
-        page = p;
-        activityLoading = true;
-        activityError = "";
-        try {
-            const data = await dashboardService.getRecentActivity(10, p);
-            // The backend returns a BARE ARRAY (original design). Accept both
-            // that and the paginated { items, total_pages } shape so the list
-            // renders regardless of which backend variant is running.
-            const items = Array.isArray(data) ? data : data?.items;
-            if (Array.isArray(items)) {
-                activity = items;
-                totalPages = data?.total_pages || 0;
-            }
-        } catch (e) {
-            activityError = e.message || "Failed to load recent activity";
-        } finally {
-            activityLoading = false;
-        }
-    }
+    const stats = $derived(() => dashboard?.stats || null);
 
-    function pageItems() {
-        const total = totalPages;
-        const current = page;
-        if (total <= 7) {
-            return Array.from({ length: total }, (_, i) => i + 1);
-        }
-        const pages = new Set([
-            1,
-            2,
-            total - 1,
-            total,
-            current - 1,
-            current,
-            current + 1,
-        ]);
-        const sorted = [...pages]
-            .filter((p) => p >= 1 && p <= total)
-            .sort((a, b) => a - b);
-        const out = [];
-        let prev = 0;
-        for (const p of sorted) {
-            if (p - prev > 1) out.push("...");
-            out.push(p);
-            prev = p;
-        }
-        return out;
-    }
-
-    onMount(async () => {
-        try {
-            const data = await dashboardService.getDashboard();
-            if (data) stats = data;
-        } catch (e) {
-            console.error("Failed to load dashboard stats", e);
-        } finally {
-            loading = false;
-        }
-
-        await loadActivity(1);
+    const statCards = $derived(() => {
+        const s = stats();
+        if (!s) return [];
+        return [
+            {
+                label: "Total Users",
+                value: s.total_users,
+                icon: Users,
+                color: "#6366f1",
+                subtitle: `${s.new_users_today || 0} new today`,
+                subtitleColor: "text-emerald-600",
+            },
+            {
+                label: "Active Jobs",
+                value: s.active_jobs,
+                icon: Briefcase,
+                color: "#8b5cf6",
+                subtitle: null,
+                subtitleColor: null,
+            },
+            {
+                label: "Pending Applications",
+                value: s.pending_applications,
+                icon: Clock,
+                color: "#f59e0b",
+                subtitle: `${s.new_applications_today || 0} today`,
+                subtitleColor: "text-blue-600",
+            },
+            {
+                label: "Total Applications",
+                value: s.total_applications,
+                icon: FileText,
+                color: "#10b981",
+                subtitle: null,
+                subtitleColor: null,
+            },
+        ];
     });
-
-    function initials(username) {
-        if (!username) return "U";
-        return username.slice(0, 2).toUpperCase();
-    }
 
     function statusInfo(status) {
         const map = {
             draft: { label: "Draft", cls: "bg-gray-100 text-gray-600" },
             submitted: { label: "Submitted", cls: "bg-blue-50 text-blue-600" },
             quiz_started: { label: "Quiz Started", cls: "bg-indigo-50 text-indigo-600" },
-            quiz_completed: { label: "Quiz Completed", cls: "bg-purple-50 text-purple-600" },
-            under_review: { label: "Under Review", cls: "bg-amber-50 text-amber-600" },
+            quiz_completed: { label: "Quiz Done", cls: "bg-purple-50 text-purple-600" },
+            under_review: { label: "Review", cls: "bg-amber-50 text-amber-600" },
             shortlisted: { label: "Shortlisted", cls: "bg-cyan-50 text-cyan-600" },
             interviewed: { label: "Interviewed", cls: "bg-teal-50 text-teal-600" },
             accepted: { label: "Accepted", cls: "bg-emerald-50 text-emerald-600" },
@@ -101,165 +83,270 @@
         };
         return map[status] || { label: status || "Unknown", cls: "bg-gray-100 text-gray-600" };
     }
+
+    function initials(username) {
+        if (!username) return "U";
+        return username.slice(0, 2).toUpperCase();
+    }
+
+    function getRandomColor(seed) {
+        const colors = ["#6366f1", "#8b5cf6", "#a855f7", "#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
+        return colors[seed ? seed.length % colors.length : 0];
+    }
+
+    async function loadDashboard() {
+        loading = true;
+        try {
+            dashboard = await dashboardService.getDashboard();
+            // Set initial activity from dashboard response
+            activity = dashboard.recent_activity || [];
+            activityPagination = dashboard.recent_activity_pagination || null;
+            initialActivityLength = activity.length;
+            initialPagination = dashboard.recent_activity_pagination || null;
+        } catch (e) {
+            console.error("Failed to load dashboard", e);
+        } finally {
+            loading = false;
+        }
+    }
+
+    async function showMore() {
+        if (!activityPagination || activityLoading) return;
+        activityLoading = true;
+        try {
+            const nextOffset = activityPagination.offset + activityPagination.limit;
+            const data = await dashboardService.getRecentActivityPage(activityPagination.limit, nextOffset);
+            // Append new items to existing list
+            activity = [...activity, ...(data.items || [])];
+            activityPagination = data.pagination || null;
+        } catch (e) {
+            console.error("Failed to load more activity", e);
+        } finally {
+            activityLoading = false;
+        }
+    }
+
+    function showLess() {
+        if (activityLoading || activity.length <= initialActivityLength) return;
+        activity = activity.slice(0, initialActivityLength);
+        activityPagination = initialPagination ? { ...initialPagination } : null;
+    }
+
+    onMount(() => {
+        loadDashboard();
+    });
 </script>
 
-<div class="space-y-6">
-    <header>
-        <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p class="text-gray-500">
-            Welcome back, {$auth.user?.name || "Admin"}!
-        </p>
-    </header>
+<div class="space-y-6 max-w-full mx-auto">
+    <!-- ============================================================ -->
+    <!-- STABLE HEADER                                                  -->
+    <!-- ============================================================ -->
+    <AdminPageHeader
+        title="Dashboard"
+        subtitle={loading ? null : `Welcome back, ${$auth.user?.name || "Admin"}!`}
+    >
+        <button
+            class="btn btn-sm bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 gap-2 rounded-xl"
+            onclick={loadDashboard}
+        >
+            <RefreshCw size={14} />
+            Refresh
+        </button>
+    </AdminPageHeader>
 
-    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="text-sm font-medium text-gray-500">Total Users</div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">
-                {loading ? "..." : stats.total_users}
+    {#if loading}
+        <AdminDashboardSkeleton />
+    {:else}
+    <!-- ============================================================ -->
+    <!-- STATISTICS CARDS                                               -->
+    <!-- ============================================================ -->
+    {#if stats()}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {#each Array(4) as _, i}
+                {@const card = statCards()[i]}
+                <div class="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-all min-h-[88px]">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0"
+                            style="background-color: {card.color}"
+                        >
+                            <card.icon size={18} />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] text-gray-400 font-medium">{card.label}</p>
+                            <p class="text-xl font-bold text-gray-900">{card.value}</p>
+                        </div>
+                    </div>
+                    {#if card.subtitle}
+                        <p class="text-xs {card.subtitleColor} mt-2">{card.subtitle}</p>
+                    {:else}
+                        <div class="mt-2 h-4"></div>
+                    {/if}
+                </div>
+            {/each}
+        </div>
+    {:else}
+        <div class="bg-white border border-gray-200 rounded-xl p-8 text-center">
+            <p class="text-sm text-gray-500">
+                Couldn't load dashboard stats right now — check your connection and try the Refresh button.
+            </p>
+        </div>
+    {/if}
+
+    <!-- ============================================================ -->
+    <!-- ANALYTICS GRAPHS                                               -->
+    <!-- ============================================================ -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <!-- Applications Trend -->
+        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div class="flex items-center gap-2">
+                    <Activity size={14} class="text-gray-400" />
+                    <h3 class="text-sm font-semibold text-gray-900">Applications Trend</h3>
+                </div>
+                <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming Soon</span>
             </div>
-            <div class="mt-2 text-xs text-green-600">
-                {stats.new_users_today || 0} new today
+            <div class="p-4 min-h-[180px] flex flex-col items-center justify-center">
+                <svg class="w-full h-32" viewBox="0 0 400 120" fill="none">
+                    <path d="M0 100 Q50 80 100 85 T200 60 T300 40 T400 50" stroke="#e5e7eb" stroke-width="2" fill="none" stroke-dasharray="4 4" />
+                    <path d="M0 90 Q50 70 100 75 T200 50 T300 30 T400 40" stroke="#c4b5fd" stroke-width="2" fill="none" opacity="0.5" />
+                </svg>
+                <p class="text-xs text-gray-400 mt-3 text-center">Analytics data will appear here when historical data is available.</p>
             </div>
         </div>
 
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="text-sm font-medium text-gray-500">Active Jobs</div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">
-                {loading ? "..." : stats.active_jobs}
+        <!-- Users Trend -->
+        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div class="flex items-center gap-2">
+                    <TrendingUp size={14} class="text-gray-400" />
+                    <h3 class="text-sm font-semibold text-gray-900">Users Trend</h3>
+                </div>
+                <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming Soon</span>
+            </div>
+            <div class="p-4 min-h-[180px] flex flex-col items-center justify-center">
+                <svg class="w-full h-32" viewBox="0 0 400 120" fill="none">
+                    <path d="M0 110 Q60 90 120 95 T240 70 T360 55 T400 60" stroke="#e5e7eb" stroke-width="2" fill="none" stroke-dasharray="4 4" />
+                    <path d="M0 100 Q60 80 120 85 T240 60 T360 45 T400 50" stroke="#a5b4fc" stroke-width="2" fill="none" opacity="0.5" />
+                </svg>
+                <p class="text-xs text-gray-400 mt-3 text-center">Analytics data will appear here when historical data is available.</p>
             </div>
         </div>
 
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="text-sm font-medium text-gray-500">
-                New Applications
+        <!-- Application Status Distribution -->
+        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden lg:col-span-2">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div class="flex items-center gap-2">
+                    <BarChart3 size={14} class="text-gray-400" />
+                    <h3 class="text-sm font-semibold text-gray-900">Application Status Distribution</h3>
+                </div>
+                <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming Soon</span>
             </div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">
-                {loading ? "..." : stats.pending_applications}
-            </div>
-            <div class="mt-2 text-xs text-blue-600">
-                {stats.new_applications_today || 0} today
-            </div>
-        </div>
-
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="text-sm font-medium text-gray-500">
-                Total Applications
-            </div>
-            <div class="mt-2 text-3xl font-bold text-gray-900">
-                {loading ? "..." : stats.total_applications}
+            <div class="p-4 min-h-[140px] flex flex-col items-center justify-center">
+                <div class="flex items-end gap-3 w-full max-w-md justify-center">
+                    {#each ["Submitted", "Review", "Shortlisted", "Rejected", "Accepted"] as label, i}
+                        {@const heights = [60, 40, 25, 35, 20]}
+                        {@const colors = ["#3b82f6", "#f59e0b", "#06b6d4", "#ef4444", "#10b981"]}
+                        <div class="flex flex-col items-center gap-1.5 flex-1">
+                            <div
+                                class="w-full rounded-t-md"
+                                style="height: {heights[i]}px; background-color: {colors[i]}; opacity: 0.2;"
+                            ></div>
+                            <span class="text-[9px] text-gray-400 font-medium text-center">{label}</span>
+                        </div>
+                    {/each}
+                </div>
+                <p class="text-xs text-gray-400 mt-3 text-center">Analytics data will appear here when historical data is available.</p>
             </div>
         </div>
     </div>
 
-    <!-- Recent Activity -->
-    <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-        <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-900">Recent Activity</h2>
+    <!-- ============================================================ -->
+    <!-- RECENT ACTIVITY                                                -->
+    <!-- ============================================================ -->
+    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h3 class="text-sm font-semibold text-gray-900">Recent Activity</h3>
             {#if activity.length > 0}
-                <span class="text-xs text-gray-400">Latest applications</span>
+                <span class="text-[11px] text-gray-400 font-medium">
+                    {activityPagination?.total || activity.length} total
+                </span>
             {/if}
         </div>
 
-        <div class="mt-4 space-y-4">
-            {#if activityLoading}
-                <div class="space-y-4">
-                    {#each [1, 2, 3] as i}
-                        <div class="flex animate-pulse items-center gap-3">
-                            <div class="h-10 w-10 rounded-full bg-gray-100"></div>
-                            <div class="flex-1 space-y-2">
-                                <div class="h-3 w-1/3 rounded bg-gray-100"></div>
-                                <div class="h-2.5 w-1/2 rounded bg-gray-50"></div>
-                            </div>
-                        </div>
-                    {/each}
-                </div>
-            {:else if activityError}
-                <div class="rounded-lg bg-red-50 p-4 text-sm text-red-600">
-                    {activityError}
-                </div>
-            {:else if activity.length === 0}
-                <div class="rounded-lg bg-gray-50 p-6 text-center text-sm text-gray-500">
-                    No recent activity yet. Applications will show up here as they come in.
+        <div class="divide-y divide-gray-50">
+            {#if activity.length === 0}
+                <div class="px-4 py-12 text-center">
+                    <Inbox size={32} class="mx-auto mb-2 text-gray-300" />
+                    <p class="text-sm text-gray-400">No recent activity yet</p>
                 </div>
             {:else}
                 {#each activity as item}
-                    <div
-                        class="flex items-center justify-between border-b border-gray-50 pb-4 last:border-0 last:pb-0"
-                    >
-                        <div class="flex min-w-0 items-center gap-3">
-                            {#if item.avatar_url}
-                                <img
-                                    src={item.avatar_url}
-                                    alt={item.github_username}
-                                    class="h-10 w-10 rounded-full object-cover"
-                                />
-                            {:else}
-                                <div
-                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-50 font-bold text-purple-600"
-                                >
-                                    {initials(item.github_username)}
-                                </div>
-                            {/if}
-                            <div class="min-w-0">
-                                <div class="truncate text-sm font-medium text-gray-900">
-                                    {item.github_username}
-                                </div>
-                                <div class="truncate text-xs text-gray-500">
-                                    Applied to {item.job_title || "a job"}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex shrink-0 flex-col items-end gap-1">
-                            <span
-                                class="rounded-full px-2.5 py-0.5 text-xs font-semibold {statusInfo(item.status).cls}"
+                    {@const cfg = statusInfo(item.status)}
+                    <div class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                        {#if item.avatar_url}
+                            <img
+                                src={item.avatar_url}
+                                alt={item.github_username}
+                                class="w-9 h-9 rounded-full object-cover shrink-0"
+                            />
+                        {:else}
+                            <div
+                                class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
+                                style="background: {getRandomColor(item.github_username)}"
                             >
-                                {statusInfo(item.status).label}
+                                {initials(item.github_username)}
+                            </div>
+                        {/if}
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-gray-900 truncate">
+                                {item.github_username}
+                            </p>
+                            <p class="text-xs text-gray-400 truncate">
+                                {item.job_title ? `Applied to ${item.job_title}` : "Submitted application"}
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {cfg.cls}">
+                                {cfg.label}
                             </span>
-                            <span class="text-xs text-gray-400">
+                            <span class="text-[11px] text-gray-400 whitespace-nowrap">
                                 {formatRelativeTime(item.submitted_at)}
                             </span>
                         </div>
                     </div>
                 {/each}
-            {/if}
-        </div>
 
-        {#if totalPages > 1}
-            <div class="mt-5 flex justify-center">
-                <div class="join">
-                    <button
-                        class="join-item btn btn-sm"
-                        disabled={page <= 1 || activityLoading}
-                        onclick={() => loadActivity(page - 1)}
-                    >
-                        «
-                    </button>
-                    {#each pageItems() as item}
-                        {#if item === "..."}
-                            <button class="join-item btn btn-sm btn-disabled">
-                                …
-                            </button>
-                        {:else}
+                <!-- Show More / Show Less Buttons -->
+                {#if activity.length > initialActivityLength || activityPagination?.has_more}
+                    <div class="px-4 py-3 text-center flex items-center justify-center gap-2">
+                        {#if activityPagination?.has_more}
                             <button
-                                class="join-item btn btn-sm {page === item
-                                    ? "btn-active"
-                                    : ""}"
+                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:text-purple-700 hover:shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                onclick={showMore}
                                 disabled={activityLoading}
-                                onclick={() => loadActivity(item)}
                             >
-                                {item}
+                                {#if activityLoading}
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                    Loading...
+                                {:else}
+                                    Show More
+                                {/if}
                             </button>
                         {/if}
-                    {/each}
-                    <button
-                        class="join-item btn btn-sm"
-                        disabled={page >= totalPages || activityLoading}
-                        onclick={() => loadActivity(page + 1)}
-                    >
-                        »
-                    </button>
-                </div>
-            </div>
-        {/if}
+                        {#if activity.length > initialActivityLength}
+                            <button
+                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:text-purple-700 hover:shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                onclick={showLess}
+                                disabled={activityLoading}
+                            >
+                                Show Less
+                            </button>
+                        {/if}
+                    </div>
+                {/if}
+            {/if}
+        </div>
     </div>
+    {/if}
 </div>
