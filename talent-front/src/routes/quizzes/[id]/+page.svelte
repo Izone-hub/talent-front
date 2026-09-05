@@ -27,6 +27,15 @@
     const applicationId = $page.url.searchParams.get("application_id");
     const jobId = $page.url.searchParams.get("job_id");
 
+    // Quiz anti-cheat state is scoped to this page instance and toggled only
+    // while the quiz is actually active. Frontend protections are deterrence,
+    // not security boundaries.
+    let antiCheat = $state({
+        enabled: false,
+        reason: "",
+    });
+    let tabLockTriggered = false;
+
     let phase = $state("loading");
     let quiz = $state(null);
     let question = $state(null);
@@ -127,6 +136,347 @@
         }
     }
 
+    // --- Quiz anti-cheat (deterrence only) ---
+
+    function isDevToolsShortcut(e) {
+        const key = (e.key || "").toLowerCase();
+        const mod = e.ctrlKey || e.metaKey;
+        const shift = e.shiftKey;
+
+        if (mod && shift && (key === "i" || key === "j" || key === "c")) {
+            return true;
+        }
+        if (mod && key === "u") {
+            return true;
+        }
+        if (!mod && key === "f12") {
+            return true;
+        }
+
+        return false;
+    }
+
+    function enableAntiCheat(reason) {
+        if (!antiCheat.enabled) {
+            antiCheat.enabled = true;
+            antiCheat.reason = reason || "quiz-active";
+            tabLockTriggered = false;
+            attachAntiCheatListeners();
+            attachDevToolsHeuristic();
+        }
+    }
+
+    function disableAntiCheat() {
+        if (!antiCheat.enabled) return;
+        antiCheat.enabled = false;
+        antiCheat.reason = "";
+        detachAntiCheatListeners();
+        detachDevToolsHeuristic();
+    }
+
+    function attachAntiCheatListeners() {
+        if (typeof window === "undefined") return;
+
+        window.addEventListener("contextmenu", onContextMenu, true);
+        window.addEventListener("copy", onCopy, true);
+        window.addEventListener("cut", onCut, true);
+        window.addEventListener("paste", onPaste, true);
+        window.addEventListener("dragstart", onDragStart, true);
+        window.addEventListener("keydown", onKeydown, true);
+        window.addEventListener("keyup", onKeyup, true);
+        window.addEventListener("beforeunload", onBeforeUnload, true);
+
+        document.addEventListener("selectionchange", onSelectionChange, true);
+
+        window.addEventListener("blur", onWindowBlur, true);
+        window.addEventListener("focus", onWindowFocus, true);
+
+        if (typeof document !== "undefined" && document.addEventListener) {
+            document.addEventListener("visibilitychange", onVisibilityChange, true);
+        }
+    }
+
+    function detachAntiCheatListeners() {
+        if (typeof window === "undefined") return;
+
+        window.removeEventListener("contextmenu", onContextMenu, true);
+        window.removeEventListener("copy", onCopy, true);
+        window.removeEventListener("cut", onCut, true);
+        window.removeEventListener("paste", onPaste, true);
+        window.removeEventListener("dragstart", onDragStart, true);
+        window.removeEventListener("keydown", onKeydown, true);
+        window.removeEventListener("keyup", onKeyup, true);
+        window.removeEventListener("beforeunload", onBeforeUnload, true);
+
+        document.removeEventListener("selectionchange", onSelectionChange, true);
+
+        window.removeEventListener("blur", onWindowBlur, true);
+        window.removeEventListener("focus", onWindowFocus, true);
+
+        if (typeof document !== "undefined" && document.removeEventListener) {
+            document.removeEventListener("visibilitychange", onVisibilityChange, true);
+        }
+    }
+
+    // Allow-list of interactive elements where text entry must still work.
+    function isInteractiveInputTarget(node) {
+        if (!node) return false;
+
+        const tag = node.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+
+        if (node.isContentEditable) return true;
+
+        // The quiz's code editor is the one place where rich code editing must
+        // remain fully usable. Treat its root wrapper as interactive.
+        if (node.classList && node.classList.contains("codemirror-wrapper")) return true;
+
+        if (node.getAttribute && node.getAttribute("contenteditable") === "true") return true;
+
+        return false;
+    }
+
+    function closestInteractiveInput(node) {
+        let cur = node;
+        while (cur && cur !== document && cur !== window) {
+            if (isInteractiveInputTarget(cur)) return cur;
+            cur = cur.parentElement || cur.parentNode;
+        }
+        return null;
+    }
+
+    function isQuizContentNode(node) {
+        if (!node) return false;
+
+        // Walk up the DOM tree looking for the quiz question card or its
+        // container. This is more reliable than checking a single class.
+        let cur = node;
+        while (cur && cur !== document && cur !== window) {
+            if (cur.classList) {
+                // The question card and the main active-quiz container both
+                // carry 'space-y-4'. The question text <h2> is a direct child
+                // of the card, so checking the card and its ancestors is enough.
+                if (
+                    cur.classList.contains("space-y-4") ||
+                    cur.classList.contains("rounded-2xl")
+                ) {
+                    return true;
+                }
+            }
+            cur = cur.parentElement || cur.parentNode;
+        }
+
+        return false;
+    }
+
+    function blockDefault(e) {
+        if (e.cancelable) {
+            e.preventDefault();
+        }
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+    }
+
+    function onContextMenu(e) {
+        if (!antiCheat.enabled) return;
+
+        // Block context menu globally while the quiz is active.
+        blockDefault(e);
+    }
+
+    function onCopy(e) {
+        if (!antiCheat.enabled) return;
+        // Prevent quiz questions and answers from being copied to external tools.
+        blockDefault(e);
+    }
+
+    function onCut(e) {
+        if (!antiCheat.enabled) return;
+        // Prevent quiz content from being moved out of the active attempt.
+        blockDefault(e);
+    }
+
+    function onPaste(e) {
+        if (!antiCheat.enabled) return;
+        // Do not allow externally prepared answers to enter quiz controls.
+        blockDefault(e);
+    }
+
+    function onDragStart(e) {
+        if (!antiCheat.enabled) return;
+
+        const target = e.target || e.srcElement;
+        if (!closestInteractiveInput(target) && isQuizContentNode(target)) {
+            blockDefault(e);
+        }
+    }
+
+    function onBeforeUnload(e) {
+        if (!antiCheat.enabled) return;
+        e.preventDefault();
+        e.returnValue = "";
+    }
+
+    function onKeydown(e) {
+        if (!antiCheat.enabled) return;
+
+        // DevTools shortcuts: interrupt the quiz immediately.
+        if (isDevToolsShortcut(e)) {
+            blockDefault(e);
+            triggerAntiCheatViolation("DevTools shortcut detected");
+            return;
+        }
+
+        const mod = e.ctrlKey || e.metaKey;
+        const key = (e.key || "").toLowerCase();
+
+        // Ctrl/Cmd + C/X: block copying or cutting quiz content and answers.
+        if (mod && (key === "c" || key === "x")) {
+            blockDefault(e);
+            triggerAntiCheatViolation(
+                key === "c" ? "Copy blocked" : "Cut blocked"
+            );
+            return;
+        }
+
+        // Ctrl/Cmd + V: block prepared answers from entering answer fields.
+        if (mod && key === "v") {
+            blockDefault(e);
+            triggerAntiCheatViolation("Paste blocked");
+            return;
+        }
+
+        // Ctrl/Cmd + A : block outside interactive inputs to prevent selecting
+        // the entire quiz page content.
+        if (mod && key === "a") {
+            const target = e.target || e.srcElement;
+            if (closestInteractiveInput(target)) return;
+            blockDefault(e);
+            triggerAntiCheatViolation("Select-all blocked");
+            return;
+        }
+    }
+
+    function onKeyup(e) {
+        // Keep key-up handlers minimal; mainly used to reset any transient
+        // per-key state if needed in future.
+    }
+
+    function onSelectionChange() {
+        if (!antiCheat.enabled) return;
+
+        const sel = window.getSelection ? window.getSelection() : null;
+        if (!sel) return;
+
+        // If the selection is entirely within interactive inputs, allow it.
+        if (sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            if (range) {
+                const container = range.commonAncestorContainer || range.startContainer;
+                if (closestInteractiveInput(container)) return;
+            }
+        }
+
+        // If the selection is effectively inside the quiz content area, nudge it
+        // back to an empty selection without disrupting typing.
+        if (sel.toString().length > 0) {
+            const target = sel.anchorNode || sel.focusNode;
+            if (target && !closestInteractiveInput(target) && isQuizContentNode(target)) {
+                try {
+                    const newSel = window.getSelection();
+                    if (newSel) {
+                        newSel.removeAllRanges();
+                    }
+                } catch {
+                    // ignore selection errors
+                }
+            }
+        }
+    }
+
+    let lastVisibleAt = 0;
+    let visibilityViolationCooldownUntil = 0;
+
+    function onVisibilityChange() {
+        if (!antiCheat.enabled) return;
+
+        const now = Date.now();
+        if (now < visibilityViolationCooldownUntil) return;
+
+        if (document.hidden) {
+            terminateQuizForTabLoss("Switched away from quiz tab");
+            visibilityViolationCooldownUntil = now + 4000;
+        } else {
+            // Returned to the tab: give a small grace window before any further
+            // detection so navigation/click noise does not re-trigger immediately.
+            visibilityViolationCooldownUntil = now + 1500;
+        }
+    }
+
+    function onWindowBlur() {
+        if (!antiCheat.enabled) return;
+
+        const now = Date.now();
+        if (now < visibilityViolationCooldownUntil) return;
+
+        // Window blur can fire on modal dialogs or popup windows. Cooldown it.
+        terminateQuizForTabLoss("Quiz window lost focus");
+        visibilityViolationCooldownUntil = now + 4000;
+    }
+
+    function onWindowFocus() {
+        if (!antiCheat.enabled) return;
+        const now = Date.now();
+        visibilityViolationCooldownUntil = now + 1500;
+    }
+
+    function triggerAntiCheatViolation(reason) {
+        antiCheat.reason = reason;
+
+        showToast(
+            `Quiz warning: ${reason}. Please stay on this page and try again.`,
+            "warning",
+            6000
+        );
+    }
+
+    async function terminateQuizForTabLoss(reason) {
+        if (!antiCheat.enabled || tabLockTriggered || isSubmitting) return;
+        tabLockTriggered = true;
+        triggerAntiCheatViolation(`${reason}; quiz terminated`);
+        resultMessage = `Quiz terminated: ${reason}.`;
+        stopTimer();
+        await submitQuiz();
+    }
+
+    // DevTools heuristics: browsers differ a lot, so we only treat a growing
+    // outer-window size as a weak secondary signal and never as the sole cause.
+    let lastOuterSize = 0;
+    let devtoolsCheckInterval = null;
+
+    function attachDevToolsHeuristic() {
+        if (typeof window === "undefined") return;
+        lastOuterSize = window.outerWidth * window.outerHeight;
+        devtoolsCheckInterval = setInterval(() => {
+            if (!antiCheat.enabled) return;
+            const current = window.outerWidth * window.outerHeight;
+            if (current > lastOuterSize + 50000) {
+                lastOuterSize = current;
+                triggerAntiCheatViolation("Window size change detected");
+            } else {
+                lastOuterSize = current;
+            }
+        }, 600);
+    }
+
+    function detachDevToolsHeuristic() {
+        if (devtoolsCheckInterval) {
+            clearInterval(devtoolsCheckInterval);
+            devtoolsCheckInterval = null;
+        }
+    }
+
     function startTimer() {
         stopTimer();
         if (!question || phase !== "active") return;
@@ -163,10 +513,17 @@
     }
 
     async function startQuiz() {
+        if (typeof window !== "undefined" && !window.confirm(
+            "Before starting the quiz, please close other tabs and windows. Leaving this quiz tab during the quiz will automatically terminate/skip the quiz."
+        )) {
+            return;
+        }
+
         phase = "starting";
         try {
             await quizService.startQuiz(quizId, applicationId, jobId);
             showToast("Quiz started!", "success");
+            enableAntiCheat("quiz-active");
             await loadNextQuestion();
         } catch (e) {
             showToast("Failed to start quiz", "error");
@@ -179,6 +536,7 @@
             const q = await quizService.getQuestion(quizId);
             if (q && q.status === "finished") {
                 stopTimer();
+                disableAntiCheat();
                 question = null;
                 resultMessage = q.message || "Quiz complete!";
                 phase = "finished";
@@ -301,7 +659,6 @@
     }
 
 
-
     async function submitQuiz() {
         if (isSubmitting) return;
         isSubmitting = true;
@@ -343,15 +700,20 @@
             }
         } finally {
             isSubmitting = false;
+            disableAntiCheat();
             phase = "finished";
         }
     }
 
     function goToApplications() {
+        stopTimer();
+        disableAntiCheat();
         goto("/applications");
     }
 
     function goToResults() {
+        stopTimer();
+        disableAntiCheat();
         goto(`/quizzes/${quizId}/result`);
     }
 
@@ -381,6 +743,7 @@
 
     onDestroy(() => {
         stopTimer();
+        disableAntiCheat();
     });
 
     onMount(() => {
@@ -436,12 +799,29 @@
                     code = details.code_template;
                 }
                 phase = "active";
+                enableAntiCheat("quiz-active");
                 startTimer();
+                await handleQuizStartAttempt();
             } else {
                 phase = "ready";
             }
         } catch {
             phase = "ready";
+        }
+    }
+
+    async function handleQuizStartAttempt() {
+        // Best-effort notify the backend that the client protected front end is
+        // active. It does not change scoring or submission behavior.
+        try {
+            await quizService.markQuizSecurityState(quizId, {
+                anti_cheat_active: true,
+            });
+        } catch (e) {
+            const msg = (e && e.message) || "";
+            if (!(msg && msg.toLowerCase().includes("not implemented"))) {
+                console.warn("Quiz anti-cheat state notification failed:", e);
+            }
         }
     }
 </script>
@@ -528,7 +908,7 @@
                 </div>
 
                 <!-- Question Card -->
-                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 space-y-4">
                     <h2 class="text-lg font-semibold leading-relaxed text-slate-800">
                         {question.question_text}
                     </h2>
