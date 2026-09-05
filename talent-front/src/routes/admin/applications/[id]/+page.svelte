@@ -78,6 +78,18 @@
         return (application?.Status || application?.status || "").toLowerCase() === "quiz_completed";
     }
 
+    // Canonical acceptance check: an applicant is accepted for this job only
+    // when users.acceptance_job_id (returned on the application row) equals
+    // the job of the application. application.status is never used for this -
+    // it remains pure application-process history ("quiz_completed" etc).
+    function isAcceptedForThisJob() {
+        if (!application) return false;
+        const acceptedJobId = application.acceptance_job_id || application.AcceptanceJobID || "";
+        const jobId = application.job_id || application.JobID || "";
+        return String(acceptedJobId) !== "" &&
+            (String(acceptedJobId) === String(jobId));
+    }
+
     function getVal(obj, ...keys) {
         if (!obj) return null;
         for (const key of keys) {
@@ -155,11 +167,10 @@
         isProcessing = true;
         try {
             const response = await applicationService.acceptApplication(getApplicationId());
-            application = response || {
-                ...application,
-                Status: "accepted",
-                status: "accepted"
-            };
+            // Accepting never rewrites application.status (that stays process
+            // history); the response carries the canonical acceptance via
+            // acceptance_job_id == job_id, so just refresh from the server.
+            application = response || application;
             showToast("Application accepted", "success");
             await loadApplication();
         } catch (error) {
@@ -412,11 +423,11 @@
                     </button>
                     <button
                         onclick={acceptApplication}
-                        disabled={isProcessing || (application.Status || application.status) === 'accepted'}
+                        disabled={isProcessing || isAcceptedForThisJob()}
                         class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check size={14} />
-                        Accept
+                        {isAcceptedForThisJob() ? 'Accepted' : 'Accept'}
                     </button>
                 </div>
             </div>
@@ -466,14 +477,20 @@
                 <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
                     <p class="text-xs font-medium uppercase tracking-wider text-gray-400">Status</p>
                     <div class="mt-2 flex items-center gap-2">
-                        <span class="inline-flex h-2.5 w-2.5 rounded-full
-                            {(application.Status || application.status || '').toLowerCase() === 'accepted' ? 'bg-emerald-500' :
-                             (application.Status || application.status || '').toLowerCase() === 'rejected' ? 'bg-red-500' :
-                             'bg-amber-500'}">
-                        </span>
-                        <span class="text-sm font-medium capitalize text-gray-900">
-                            {application.Status || application.status || "unknown"}
-                        </span>
+                        {#if isAcceptedForThisJob()}
+                            <span class="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                            <span class="text-sm font-semibold capitalize text-emerald-700">
+                                Accepted
+                            </span>
+                        {:else}
+                            <span class="inline-flex h-2.5 w-2.5 rounded-full
+                                {(application.Status || application.status || '').toLowerCase() === 'rejected' ? 'bg-red-500' :
+                                 'bg-amber-500'}">
+                            </span>
+                            <span class="text-sm font-medium capitalize text-gray-900">
+                                {application.Status || application.status || "unknown"}
+                            </span>
+                        {/if}
                     </div>
                 </div>
 

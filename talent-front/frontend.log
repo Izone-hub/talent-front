@@ -1,0 +1,164 @@
+
+> talent-front@0.0.1 dev
+> vite dev
+
+
+  VITE v7.3.1  ready in 6691 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+[Server Error] 404: SvelteKitError: Not found: /favicon.ico
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+10:57:27 PM [vite-plugin-svelte] src/routes/+error.svelte:50:5 Using `on:click` to listen to the click event is deprecated. Use the event attribute `onclick` instead
+https://svelte.dev/e/event_directive_deprecated
+/*! 🌼 daisyUI 5.5.14 */
+10:58:14 PM [vite-plugin-svelte] src/lib/components/jobs/JobDetailModal.svelte:635:7 Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label
+10:58:15 PM [vite-plugin-svelte] src/lib/components/jobs/FindJobSearch.svelte:107:1 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+10:58:15 PM [vite-plugin-svelte] src/lib/components/jobs/FindJobSearch.svelte:107:1 `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+10:58:15 PM [vite-plugin-svelte] src/lib/components/jobs/FindJobSearch.svelte:127:3 Elements with the ARIA role "combobox" must have the following attributes defined: "aria-controls" and "aria-expanded"
+https://svelte.dev/e/a11y_role_has_required_aria_props
+[Server Error] 404: SvelteKitError: Not found: /aa
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+[Server Error] 404: SvelteKitError: Not found: /hh
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+[Server Error] 404: SvelteKitError: Not found: /aa
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+[Server Error] 404: SvelteKitError: Not found: /hh
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+10:59:50 PM [vite-plugin-svelte] src/routes/quizzes/[id]/+page.svelte:577:28 A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control
+10:59:50 PM [vite-plugin-svelte] src/lib/components/ui/CodeEditor.svelte:48:20 This reference only captures the initial value of `height`. Did you mean to reference it inside a closure instead?
+https://svelte.dev/e/state_referenced_locally
+10:59:50 PM [vite-plugin-svelte] src/lib/components/ui/CodeEditor.svelte:90:0 `<div>` with a keydown handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+[Server Error] 404: SvelteKitError: Not found: /aa
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+[Server Error] 404: SvelteKitError: Not found: /hh
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:685:13)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:435:11
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+    at with_request_store (file:///home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/exports/internal/event.js:77:20)
+    at fn (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:434:17)
+    at record_span (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/telemetry/record_span.js:9:10)
+    at resolve (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:426:15)
+    at init_promise.#options.hooks.handle (/home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/index.js:111:56)
+    at /home/meka/temp/talent-front/talent-front/node_modules/@sveltejs/kit/src/runtime/server/respond.js:423:20
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14) {
+  status: 404,
+  text: 'Not Found'
+}
+11:02:17 PM [vite-plugin-svelte] src/lib/components/ui/AdminPageHeader.svelte:54:12 Using `<slot>` to render parent content is deprecated. Use `{@render ...}` tags instead
+https://svelte.dev/e/slot_element_deprecated
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:14:14 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:14:26 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:16:20 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:17:18 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:17:46 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:18:18 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:19:12 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:21:21 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:21:40 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:22:15 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:22 PM [vite-plugin-svelte] src/lib/components/modals/admin/tag/editTag.svelte:22:28 This reference only captures the initial value of `tag`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+11:02:24 PM [vite-plugin-svelte] src/routes/admin/applications/+page.svelte:256:28 `<svelte:component>` is deprecated in runes mode — components are dynamic by default
+https://svelte.dev/e/svelte_component_deprecated
+11:02:24 PM [vite-plugin-svelte] src/routes/admin/applications/+page.svelte:318:36 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:02:24 PM [vite-plugin-svelte] src/routes/admin/applications/+page.svelte:318:36 `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+11:02:24 PM [vite-plugin-svelte] src/routes/admin/applications/+page.svelte:490:40 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:02:24 PM [vite-plugin-svelte] src/routes/admin/applications/+page.svelte:490:40 `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions
+11:02:24 PM [vite-plugin-svelte] src/routes/admin/applications/+page.svelte:525:52 `<svelte:component>` is deprecated in runes mode — components are dynamic by default
+https://svelte.dev/e/svelte_component_deprecated
+11:03:11 PM [vite-plugin-svelte] src/lib/components/jobs/SavedJobs.svelte:57:16 Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events
+11:03:11 PM [vite-plugin-svelte] src/lib/components/jobs/SavedJobs.svelte:57:16 `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions

@@ -1,6 +1,5 @@
 <script>
     import { goto } from '$app/navigation';
-    import { jobService } from '$lib/api/job.service';
     import { applicationService } from '$lib/api/application.service';
     import EmptyState from '$lib/components/ui/EmptyState.svelte';
     import AdminPageHeader from '$lib/components/ui/AdminPageHeader.svelte';
@@ -32,8 +31,14 @@
     } from 'lucide-svelte';
     import { getCategoryConfig } from '$lib/utils/jobCategories';
 
+    // ------------------------------------------------------------------
+    // State: the backend returns everything aggregated in one response —
+    // jobs with per-job counters, the overview stats and the quiz-completed
+    // candidates. This page renders; it does not count or filter client-side.
+    // ------------------------------------------------------------------
     let jobs = $state([]);
-    let jobCounts = $state({});
+    let quizCandidates = $state([]);
+    let summary = $state({ total_applicants: 0, quiz_done: 0, shortlisted: 0, accepted: 0 });
     let jobApps = $state({});
     let loading = $state(true);
     let loadingApps = $state(false);
@@ -44,6 +49,7 @@
     // still see a full page of applicants without scrolling pagination.
     const APPS_PER_PAGE = 10;
     const INITIAL_JOBS = 4;
+    const QUIZ_CARD_PAGE_SIZE = 10;
 
     const typeLabels = {
         full_time: 'Full Time',
@@ -53,103 +59,54 @@
         internship: 'Internship',
     };
 
+    let loadStarted = false;
     $effect(() => {
-        loadJobs();
+        if (loadStarted) return;
+        loadStarted = true;
+        loadOverview();
     });
 
-    let sortedJobs = $derived(() => {
-        const sorted = [...jobs].sort((a, b) => {
-            const countA = jobCounts[a.id || a.ID] || 0;
-            const countB = jobCounts[b.id || b.ID] || 0;
-            return countB - countA;
-        });
-        return sorted;
-    });
+    // Jobs arrive pre-sorted by applicant count from the backend; keep them in
+    // that order for the "most applicants first" listing.
+    let sortedJobs = $derived(() => [...jobs]);
 
     let visibleJobs = $derived(() => {
         const all = sortedJobs();
         return showAllJobs ? all : all.slice(0, INITIAL_JOBS);
     });
 
-    let quizCompletedApps = $derived(() => {
-        const all = [];
-        for (const [jobId, apps] of Object.entries(jobApps)) {
-            for (const app of apps) {
-                const status = (app.Status || app.status || '').toLowerCase();
-                if (status === 'quiz_completed' || status === 'shortlisted' || status === 'accepted' || status === 'under_review') {
-                    const job = jobs.find(j => (j.id || j.ID) === jobId);
-                    all.push({ ...app, _jobTitle: job?.title || job?.Title || 'Unknown' });
-                }
-            }
-        }
-        return all.sort((a, b) => {
-            const scoreA = getVal(a, 'QuizScore', 'quiz_score') || 0;
-            const scoreB = getVal(b, 'QuizScore', 'quiz_score') || 0;
-            return scoreB - scoreA;
-        });
-    });
-
-    // ---- Overview stats (kept reactive against the state above) ----
-    let statTotal = $derived(Object.values(jobCounts).reduce((a, b) => a + b, 0));
-    let statQuizDone = $derived(quizCompletedApps().length);
-    let statShortlisted = $derived(countAppsInStatus('shortlisted'));
-    let statAccepted = $derived(countAppsInStatus('accepted'));
-
+    // ---- Overview stat cards (values come straight from the server) ----
     function getStatCards() {
         return [
-            { label: 'Total Applicants', value: statTotal, icon: Users, color: '#6366f1', note: 'across all jobs' },
-            { label: 'Quiz Done', value: statQuizDone, icon: Trophy, color: '#f59e0b', note: 'top performers' },
-            { label: 'Shortlisted', value: statShortlisted, icon: Star, color: '#8b5cf6', note: 'moving forward' },
-            { label: 'Accepted', value: statAccepted, icon: CircleCheck, color: '#059669', note: 'closed the loop' },
+            { label: 'Total Applicants', value: summary.total_applicants, icon: Users, color: '#6366f1', note: 'across all jobs' },
+            { label: 'Quiz Done', value: summary.quiz_done, icon: Trophy, color: '#f59e0b', note: 'top performers' },
+            { label: 'Shortlisted', value: summary.shortlisted, icon: Star, color: '#8b5cf6', note: 'moving forward' },
+            { label: 'Accepted', value: summary.accepted, icon: CircleCheck, color: '#059669', note: 'closed the loop' },
         ];
     }
 
-    function countAppsInStatus(target) {
-        let n = 0;
-        for (const apps of Object.values(jobApps)) {
-            for (const app of apps) {
-                if ((app.Status || app.status || '').toLowerCase() === target) n++;
-            }
-        }
-        return n;
-    }
-
-    async function loadJobs() {
+    async function loadOverview() {
         loading = true;
         try {
-            jobs = await jobService.listPublishedJobs();
-            const counts = {};
-            const appsMap = {};
-            await Promise.all(
-                jobs.map(async (job) => {
-                    const id = job.id || job.ID;
-                    try {
-                        const apps = await applicationService.getJobApplications(id);
-                        const appList = Array.isArray(apps) ? apps : [];
-                        counts[id] = appList.length;
-                        appsMap[id] = appList;
-                    } catch {
-                        counts[id] = 0;
-                        appsMap[id] = [];
-                    }
-                })
-            );
-            jobCounts = counts;
-            jobApps = appsMap;
+            const overview = await applicationService.getAdminApplicationsOverview();
+            jobs = overview.jobs;
+            quizCandidates = overview.quizCandidates;
+            summary = overview.summary;
         } catch (error) {
-            console.error('Failed to load jobs:', error);
+            console.error('Failed to load applications overview:', error);
+            jobs = [];
         } finally {
             loading = false;
         }
     }
 
+    // ---- Per-job applicant list (fetched lazily only when a card expands) ----
     async function loadApplications(jobId) {
-        if (jobApps[jobId]) return; // already fetched during loadJobs
+        if (jobApps[jobId]) return;
         loadingApps = true;
         try {
             const data = await applicationService.getJobApplications(jobId);
-            jobApps[jobId] = Array.isArray(data) ? data : [];
-            jobCounts[jobId] = jobApps[jobId].length;
+            jobApps = { ...jobApps, [jobId]: Array.isArray(data) ? data : [] };
         } catch (error) {
             console.error('Failed to load applications:', error);
         } finally {
@@ -162,8 +119,10 @@
             expandedCard = null;
         } else {
             expandedCard = jobId;
-            appPages[jobId] = 0;
-            loadApplications(jobId);
+            appPages = { ...appPages, [jobId]: 0 };
+            if (jobId !== 'quiz-completed') {
+                loadApplications(jobId);
+            }
         }
     }
 
@@ -223,7 +182,6 @@
             under_review: { label: 'Review', class: 'bg-cyan-50 text-cyan-700', icon: Loader },
             shortlisted: { label: 'Shortlisted', class: 'bg-purple-50 text-purple-700', icon: Star },
             interviewed: { label: 'Interviewed', class: 'bg-violet-50 text-violet-700', icon: MessageSquare },
-            accepted: { label: 'Accepted', class: 'bg-emerald-50 text-emerald-700', icon: Trophy },
             rejected: { label: 'Rejected', class: 'bg-rose-50 text-rose-700', icon: CircleX },
             withdrawn: { label: 'Withdrawn', class: 'bg-gray-50 text-gray-500', icon: RotateCcw },
         };
@@ -249,6 +207,18 @@
     function getApplicantName(app) {
         return getVal(app, 'Name', 'name', 'ApplicantName') || getVal(app, 'github_username', 'GithubUsername') || '—';
     }
+
+    // Counters live on each job row (server-side); the card shows the count of
+    // applications actually loaded for it when expanded (pagination is client-side).
+    function jobCount(job) {
+        const id = job.id || job.ID;
+        const loaded = (jobApps[id] || []).length;
+        return loaded > 0 ? loaded : (job.stats?.total_applications ?? 0);
+    }
+
+    function jobStats(job) {
+        return job.stats || {};
+    }
 </script>
 
 <div class="space-y-6 max-w-full mx-auto">
@@ -258,7 +228,7 @@
     >
         <button
             class="btn btn-sm bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 gap-2 rounded-xl"
-            onclick={() => loadJobs()}
+            onclick={() => loadOverview()}
         >
             <RefreshCw size={14} />
             Refresh
@@ -275,7 +245,7 @@
         />
     {:else}
         <!-- ============================================================ -->
-        <!-- Overview stat strip                                            -->
+        <!-- Overview stat strip (server-computed summary)                  -->
         <!-- ============================================================ -->
         <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {#each getStatCards() as stat}
@@ -297,6 +267,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- ============================================================ -->
             <!-- Special Card: Quiz Completed Users (top talent)               -->
+            <!-- The list is computed server-side (score-sorted across jobs).  -->
             <!-- ============================================================ -->
             <div
                 class="group text-left bg-white border rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden
@@ -307,7 +278,7 @@
                 <!-- Card Header (always visible) -->
                 <button
                     class="w-full text-left p-4 sm:p-5"
-                    onclick={() => expandedCard === 'quiz-completed' ? expandedCard = null : expandedCard = 'quiz-completed'}
+                    onclick={() => toggleCard('quiz-completed')}
                 >
                     <div class="flex items-center gap-3">
                         <div
@@ -325,7 +296,7 @@
                         <div class="flex items-center gap-1.5 shrink-0">
                             <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
                                 <Trophy size={11} />
-                                {quizCompletedApps().length}
+                                {quizCandidates.length}
                             </span>
                             <span class="text-gray-300 transition-transform duration-300 {expandedCard === 'quiz-completed' ? 'rotate-180 text-amber-400' : ''}">
                                 <ChevronDown size={16} />
@@ -337,15 +308,16 @@
                 <!-- Expanded Content -->
                 {#if expandedCard === 'quiz-completed'}
                     <div class="px-4 sm:px-5 pb-5 border-t border-amber-100 pt-4">
-                        {#if quizCompletedApps().length === 0}
+                        {#if quizCandidates.length === 0}
                             <p class="text-sm text-gray-400 text-center py-4">No quiz completed users yet</p>
                         {:else}
                             <div class="grid gap-2 lg:grid-cols-2">
-                                {#each quizCompletedApps().slice(0, 10) as app, i}
-                                    {@const score = getVal(app, 'QuizScore', 'quiz_score') || 0}
+                                {#each quizCandidates.slice(0, QUIZ_CARD_PAGE_SIZE) as app, i}
+                                    {@const name = app.applicant_name || app.ApplicantName || app.applicant_github_username || 'Applicant'}
+                                    {@const score = app.quiz_score ?? 0}
                                     <div
                                         class="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100 hover:border-amber-300 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-                                        onclick={(e) => { e.stopPropagation(); goto(`/admin/applications/${app.ID || app.id}`); }}
+                                        onclick={(e) => { e.stopPropagation(); goto(`/admin/applications/${app.application_id || app.ID}`); }}
                                     >
                                         {#if i === 0}
                                             <span class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-sm">
@@ -358,15 +330,15 @@
                                         {/if}
                                         <div
                                             class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0"
-                                            style="background: {getRandomColor(getVal(app, 'Name', 'name', 'ApplicantName'))}"
+                                            style="background: {getRandomColor(name)}"
                                         >
-                                            {getInitials(getVal(app, 'Name', 'name', 'ApplicantName'))}
+                                            {getInitials(name)}
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <p class="text-sm font-semibold text-gray-900 truncate">
-                                                {getVal(app, 'Name', 'name', 'ApplicantName') || '—'}
+                                                {name}
                                             </p>
-                                            <p class="text-xs text-gray-400 truncate">{app._jobTitle}</p>
+                                            <p class="text-xs text-gray-400 truncate">{app.job_title || app.JobTitle || 'Unknown'}</p>
                                         </div>
                                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold {getScoreColor(score)} shrink-0">
                                             <Star size={10} />
@@ -375,9 +347,9 @@
                                     </div>
                                 {/each}
                             </div>
-                            {#if quizCompletedApps().length > 10}
+                            {#if quizCandidates.length > QUIZ_CARD_PAGE_SIZE}
                                 <p class="text-xs text-gray-400 text-center mt-3">
-                                    + {quizCompletedApps().length - 10} more users — expand a job below to see them
+                                    + {quizCandidates.length - QUIZ_CARD_PAGE_SIZE} more users — expand a job below to see them
                                 </p>
                             {/if}
                         {/if}
@@ -390,7 +362,7 @@
             <!-- ============================================================ -->
             {#each visibleJobs() as job (job.id || job.ID)}
                 {@const id = job.id || job.ID}
-                {@const count = jobCounts[id] || 0}
+                {@const count = jobCount(job)}
                 {@const catCfg = getCategoryConfig(job.category || job.Category || 'other')}
                 {@const isExpanded = expandedCard === id}
                 {@const pageApps = getPageApps(id)}
@@ -494,12 +466,12 @@
                                 <div class="flex items-center justify-center py-8">
                                     <span class="loading loading-spinner loading-sm text-purple-600"></span>
                                 </div>
-                            {:else if count === 0}
+                            {:else if (jobApps[id] || []).length === 0}
                                 <p class="text-sm text-gray-400 text-center py-8">No applicants yet — check back soon</p>
                             {:else}
                                 <div class="mb-3 flex items-center justify-between gap-3">
                                     <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                                        Showing {pageApps.length} of {count} applicants
+                                        Showing {pageApps.length} of {(jobApps[id] || []).length} applicants
                                     </p>
                                     {#if totalPages > 1}
                                         <p class="text-[11px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
@@ -601,14 +573,14 @@
         </div>
 
         <!-- Show More / Show Less Buttons -->
-        {#if sortedJobs().length > INITIAL_JOBS}
+        {#if jobs.length > INITIAL_JOBS}
             <div class="text-center flex items-center justify-center gap-2">
                 <button
                     class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:text-purple-700 hover:shadow-md transition-all cursor-pointer"
                     onclick={() => showAllJobs = !showAllJobs}
                 >
                     {#if !showAllJobs}
-                        Show {sortedJobs().length - INITIAL_JOBS} more jobs
+                        Show {jobs.length - INITIAL_JOBS} more jobs
                         <ChevronDown size={15} />
                     {:else}
                         <ChevronDown size={15} class="rotate-180" />

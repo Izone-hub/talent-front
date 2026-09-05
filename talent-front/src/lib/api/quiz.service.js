@@ -41,6 +41,12 @@ export const quizService = {
 		return apiClient.get('/quizzes');
 	},
 
+	// Admin-only: all quiz attempts taken by a user across all jobs.
+	listUserQuizzes: async (userId) => {
+		const response = await apiClient.get(`/users/${userId}/quizzes`);
+		return response || [];
+	},
+
 	saveQuizResult: (quizId, data) => {
 		if (typeof window === 'undefined') return;
 		try {

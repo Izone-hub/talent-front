@@ -27,14 +27,18 @@
 		<!-- Center: Navigation -->
 		<ul class="hidden items-center gap-6 md:flex">
 			{#each NAVIGATION_LINKS as link (link.name)}
-				<li>
-					<a
-						href={link.path}
-						class="text-sm font-medium text-gray-700 transition-colors hover:text-purple-700"
-					>
-						{link.name}
-					</a>
-				</li>
+				<!-- A user who has already accepted a job must not keep browsing
+					 open positions: hide the "Find Job" entry from the nav. -->
+				{#if !(link.path === "/jobs" && $auth.user?.acceptance_job_id)}
+					<li>
+						<a
+							href={link.path}
+							class="text-sm font-medium text-gray-700 transition-colors hover:text-purple-700"
+						>
+							{link.name}
+						</a>
+					</li>
+				{/if}
 			{/each}
 		</ul>
 
