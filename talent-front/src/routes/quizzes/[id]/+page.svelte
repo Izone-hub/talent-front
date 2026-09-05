@@ -404,7 +404,7 @@
         const now = Date.now();
         if (now < visibilityViolationCooldownUntil) return;
 
-        if (document.hidden) {
+        if (document.visibilityState === "hidden") {
             terminateQuizForTabLoss("Switched away from quiz tab");
             visibilityViolationCooldownUntil = now + 4000;
         } else {
@@ -514,7 +514,7 @@
 
     async function startQuiz() {
         if (typeof window !== "undefined" && !window.confirm(
-            "Before starting the quiz, please close other tabs and windows. Leaving this quiz tab during the quiz will automatically terminate/skip the quiz."
+            "Before starting, close other tabs and windows. Leaving this quiz during the attempt will automatically terminate the quiz."
         )) {
             return;
         }
