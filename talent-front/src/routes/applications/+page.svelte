@@ -14,22 +14,30 @@
         FileQuestion,
         CheckCircle2,
         XCircle,
-        Loader2,
-        AlertTriangle,
-        X,
-        PartyPopper,
-        Sparkles,
-        Send,
-        Activity,
-        ThumbsDown,
-    } from "@lucide/svelte";
+        Loader2,		AlertTriangle,
+		X,
+		Send,
+		Activity,
+		ThumbsDown,
+	} from "@lucide/svelte";
 
-    let applications = $state([]);
-    let isLoading = $state(true);
-    let showWarningModal = $state(false);
-    let pendingQuizApp = $state(null);
-    let selectedJob = $state(null);
-    let isLoadingDetail = $state(false);
+	let applications = $state([]);
+	let isLoading = $state(true);
+	let showWarningModal = $state(false);
+	let pendingQuizApp = $state(null);
+	let selectedJob = $state(null);
+	let isLoadingDetail = $state(false);
+
+	// Stats are aggregated server-side (one request, one payload); the client
+	// only renders them.
+	let stats = $state({ total: 0, active: 0, accepted: 0, rejected: 0 });
+
+	// A user who has accepted a job can no longer browse other positions:
+	// their CTA should lead back to the accepted-job area instead.
+	const hasAcceptedJob = $derived(
+		$auth.isAuthenticated && Boolean($auth.user?.acceptance_job_id)
+	);
+
 
     const statusConfig = {
         draft: { label: "Draft", cls: "bg-slate-100 text-slate-600 ring-slate-200/70" },
@@ -44,11 +52,6 @@
         withdrawn: { label: "Withdrawn", cls: "bg-slate-100 text-slate-500 ring-slate-200/70" },
     };
 
-    const activeStatuses = [
-        "submitted", "quiz_started", "quiz_completed",
-        "under_review", "shortlisted", "interviewed",
-    ];
-
     const statusProgress = {
         draft: 8, submitted: 20, quiz_started: 35, quiz_completed: 50,
         under_review: 60, shortlisted: 75, interviewed: 85,
@@ -59,13 +62,6 @@
         const s = String(status || "").toLowerCase();
         return statusConfig[s] || { label: String(status || "N/A"), cls: "bg-slate-100 text-slate-600 ring-slate-200/70" };
     }
-
-    let stats = $derived({
-        total: applications.length,
-        active: applications.filter((a) => activeStatuses.includes(String(a.Status || "").toLowerCase())).length,
-        accepted: applications.filter((a) => String(a.Status || "").toLowerCase() === "accepted").length,
-        rejected: applications.filter((a) => String(a.Status || "").toLowerCase() === "rejected").length,
-    });
 
     function canTakeQuiz(app) {
         return (
@@ -140,22 +136,29 @@
     }
 
     $effect(() => {
-        // Track route so data reloads on every navigation to this page
-        const _route = $page.url.pathname;
+        // Track route so data reloads on every navigation to this page.
+        const route = $page.url.pathname;
         if ($auth.loading) return;
         if (!$auth.isAuthenticated) {
             showToast("Please login to view your applications", "warning");
             goto("/auth");
             return;
         }
-        isLoading = true;
-        loadApplications();
+        loadApplications(route);
     });
 
-    async function loadApplications() {
+    // Guards against duplicate requests: the effect can re-run while the auth
+    // store settles, but only the first run per page entry hits the API.
+    let loadedRoute = null;
+    async function loadApplications(route) {
+        if (loadedRoute === route) return;
+        loadedRoute = route;
+        isLoading = true;
         try {
-            const data = await applicationService.getMyApplications();
-            applications = Array.isArray(data) ? data : [];
+            const { applications: data, stats: serverStats } =
+                await applicationService.getMyApplicationsOverview();
+            applications = data;
+            stats = serverStats;
         } catch (error) {
             console.error("Failed to load applications:", error);
             showToast("Failed to load applications", "error");
@@ -191,19 +194,20 @@
             <div>
                 <h1 class="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                     My Applications
-                </h1>
-                <p class="mt-1.5 text-slate-500">
-                    Track and manage your job applications
-                </p>
-            </div>
-            <a
-                href="/jobs"
-                class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600"
-            >
-                <Briefcase class="h-4 w-4" />
-                Browse Jobs
-            </a>
-        </div>
+                </h1>				<p class="mt-1.5 text-slate-500">
+					Track and manage your job applications
+				</p>
+			</div>
+			{#if !hasAcceptedJob}
+				<a
+					href="/jobs"
+					class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600"
+				>
+					<Briefcase class="h-4 w-4" />
+					Browse Jobs
+				</a>
+			{/if}
+		</div>
 
         <!-- ─── Stats overview ─── -->
         {#if !isLoading && applications.length > 0}
@@ -245,41 +249,7 @@
                     </div>
                 </div>
             </div>
-        {/if}
-
-        {#if !isLoading && applications.length > 0 && stats.accepted > 0}
-            {@const acceptedApps = applications.filter((a) => String(a.Status || "").toLowerCase() === "accepted")}
-            <div class="relative mb-6 overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-green-50 p-6 shadow-lg shadow-emerald-100/50 sm:p-7">
-                <div class="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-emerald-200/30 blur-2xl"></div>
-                <div class="relative flex items-start gap-4">
-                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md shadow-emerald-200">
-                        <PartyPopper class="h-7 w-7 text-white" />
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-xl font-bold text-emerald-800">
-                            🎉 Congratulations!
-                        </h2>
-                        <p class="mt-1 text-sm text-emerald-700">
-                            {#if acceptedApps.length === 1}
-                                Your application for <strong>{acceptedApps[0].JobTitle}</strong> at <strong>{acceptedApps[0].JobCompany}</strong> has been accepted!
-                            {:else}
-                                You have {acceptedApps.length} accepted application{acceptedApps.length > 1 ? "s" : ""}!
-                            {/if}
-                        </p>
-                        <a
-                            href="/applications/accepted"
-                            class="mt-3 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-200 transition hover:bg-emerald-700"
-                        >
-                            <Sparkles class="h-4 w-4" />
-                            View Next Steps
-                            <ArrowRight class="h-4 w-4" />
-                        </a>
-                    </div>
-                </div>
-            </div>
-        {/if}
-
-        {#if isLoading}
+        {/if}		{#if isLoading}
             <div class="space-y-4" role="status" aria-busy="true" aria-label="Loading your applications">
                 {#each [1, 2, 3] as _}
                     <div class="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
@@ -299,43 +269,36 @@
                 <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100">
                     <Briefcase class="h-8 w-8 text-indigo-500" />
                 </div>
-                <h3 class="text-lg font-bold text-slate-700">
-                    No applications yet
-                </h3>
-                <p class="mx-auto mt-1.5 max-w-sm text-sm text-slate-400">
-                    Browse jobs and apply to get started
-                </p>
-                <a
-                    href="/jobs"
-                    class="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700"
-                >
-                    Browse Jobs
-                    <ArrowRight class="h-4 w-4" />
-                </a>
+                <h3 class="text-lg font-bold text-slate-700">					No applications yet
+				</h3>
+				<p class="mx-auto mt-1.5 max-w-sm text-sm text-slate-400">
+					Browse jobs and apply to get started
+				</p>
+				{#if !hasAcceptedJob}
+					<a
+						href="/jobs"
+						class="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700"
+					>
+						Browse Jobs
+						<ArrowRight class="h-4 w-4" />
+					</a>
+				{/if}
             </div>
         {:else}
             <div class="space-y-4">
-                {#each applications as app, index (app.ID)}
-                    {@const statusKey = String(app.Status || "").toLowerCase()}
-                    {@const st = statusBadge(app.Status)}
-                    {@const progress = statusProgress[statusKey] ?? 0}
-                    {@const isAccepted = statusKey === "accepted"}
-                    {@const isRejected = statusKey === "rejected"}
-                    {@const canQuiz = canTakeQuiz(app)}
-                    {@const canResult = canViewResult(app)}
-                    <div
-                        class="app-card group relative overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg {isAccepted
-                            ? 'border-emerald-200 hover:shadow-emerald-100/60'
-                            : isRejected
-                                ? 'border-slate-200/70 hover:shadow-indigo-100/60'
-                                : 'border-slate-200/70 hover:border-indigo-200 hover:shadow-indigo-100/60'}"
-                        style="animation-delay: {Math.min(index * 60, 360)}ms"
-                    >
-                        {#if isAccepted}
-                            <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400"></div>
-                        {/if}
-
-                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                {#each applications as app, index (app.ID)}					{@const statusKey = String(app.Status || "").toLowerCase()}
+					{@const st = statusBadge(app.Status)}
+					{@const progress = statusProgress[statusKey] ?? 0}
+					{@const isRejected = statusKey === "rejected"}
+					{@const canQuiz = canTakeQuiz(app)}
+					{@const canResult = canViewResult(app)}
+					<div
+						class="app-card group relative overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg {isRejected
+							? 'border-slate-200/70 hover:shadow-indigo-100/60'
+							: 'border-slate-200/70 hover:border-indigo-200 hover:shadow-indigo-100/60'}"
+						style="animation-delay: {Math.min(index * 60, 360)}ms"
+					>
+						<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <!-- Left: job info -->
                             <div
                                 class="flex min-w-0 flex-1 cursor-pointer items-start gap-4"
@@ -358,13 +321,9 @@
                                     <div class="flex flex-wrap items-center gap-2">
                                         <h2 class="truncate text-lg font-bold tracking-tight text-slate-800 transition-colors group-hover:text-indigo-600">
                                             {app.JobTitle || "Unknown Position"}
-                                        </h2>
-                                        <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 {st.cls}">
-                                            {#if isAccepted}
-                                                <Sparkles class="mr-1 h-3 w-3" />
-                                            {/if}
-                                            {st.label}
-                                        </span>
+                                        </h2>										<span class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 {st.cls}">
+											{st.label}
+										</span>
                                     </div>
                                     <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
                                         <span class="inline-flex items-center gap-1.5">
@@ -411,25 +370,12 @@
                                         <CheckCircle2 class="h-4 w-4" />
                                         View Result
                                         <ArrowRight class="h-4 w-4" />
-                                    </button>
-                                {:else if ["under_review", "shortlisted", "interviewed"].includes(statusKey)}
-                                    <span class="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100">
-                                        <Loader2 class="h-4 w-4 animate-spin" />
-                                        In Review
-                                    </span>
-                                {:else if isAccepted}
-                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3.5 py-1.5 text-sm font-semibold text-emerald-700">
-                                        <CheckCircle2 class="h-4 w-4" />
-                                        Accepted!
-                                    </span>
-                                    <a
-                                        href="/applications/accepted"
-                                        class="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-800"
-                                    >
-                                        View next steps
-                                        <ArrowRight class="h-3 w-3" />
-                                    </a>
-                                {:else if isRejected}
+                                    </button>								{:else if ["under_review", "shortlisted", "interviewed"].includes(statusKey)}
+									<span class="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-100">
+										<Loader2 class="h-4 w-4 animate-spin" />
+										In Review
+									</span>
+								{:else if isRejected}
                                     <span class="inline-flex items-center gap-2 rounded-xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-100">
                                         <XCircle class="h-4 w-4" />
                                         Not Selected
@@ -443,21 +389,18 @@
                             <div class="mb-1.5 flex items-center justify-between">
                                 <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                                     Progress
-                                </span>
-                                <span class="text-[11px] font-bold {isAccepted ? 'text-emerald-600' : isRejected ? 'text-rose-500' : 'text-indigo-600'}">
-                                    {progress}%
-                                </span>
-                            </div>
-                            <div class="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                    class="h-full rounded-full transition-all duration-500 {isAccepted
-                                        ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
-                                        : isRejected
-                                            ? 'bg-rose-400'
-                                            : 'bg-gradient-to-r from-indigo-500 to-violet-500'}"
-                                    style="width: {progress}%"
-                                ></div>
-                            </div>
+                                </span>								<span class="text-[11px] font-bold {isRejected ? 'text-rose-500' : 'text-indigo-600'}">
+									{progress}%
+								</span>
+							</div>
+							<div class="h-1.5 overflow-hidden rounded-full bg-slate-100">
+								<div
+									class="h-full rounded-full transition-all duration-500 {isRejected
+										? 'bg-rose-400'
+										: 'bg-gradient-to-r from-indigo-500 to-violet-500'}"
+									style="width: {progress}%"
+								></div>
+							</div>
                         </div>
                     </div>
                 {/each}

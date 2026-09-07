@@ -1,9 +1,22 @@
 import { apiClient } from './client';
 
 export const applicationService = {
+    // The backend already filters, joins and aggregates: /applications/my
+    // returns { applications, stats }. getMyApplications keeps the legacy
+    // array contract for consumers that only need the list.
     getMyApplications: async () => {
-        const response = await apiClient.get('/applications/my');
-        return response || [];
+        const overview = await apiClient.get('/applications/my');
+        return overview && Array.isArray(overview.applications) ? overview.applications : [];
+    },
+
+    // Structured payload for the My Applications dashboard: UI-ready rows plus
+    // precomputed stats (total / active / accepted / rejected).
+    getMyApplicationsOverview: async () => {
+        const overview = await apiClient.get('/applications/my');
+        return {
+            applications: overview && Array.isArray(overview.applications) ? overview.applications : [],
+            stats: overview?.stats || { total: 0, active: 0, accepted: 0, rejected: 0 },
+        };
     },
 
     getApplicationDetail: async (id) => {
@@ -72,5 +85,22 @@ export const applicationService = {
     getApplicationCountsByJob: async (jobId) => {
         const response = await apiClient.get(`/jobs/${jobId}/applications/counts`);
         return response;
+    },
+
+    // Admin Applications overview: one aggregate request that returns every
+    // published job with its per-job application counters, the summary stats
+    // and the quiz-completed candidates - all computed server-side.
+    getAdminApplicationsOverview: async () => {
+        const response = await apiClient.get('/admin/applications/overview');
+        return {
+            jobs: response?.jobs || [],
+            quizCandidates: response?.quiz_candidates || [],
+            summary: response?.summary || {
+                total_applicants: 0,
+                quiz_done: 0,
+                shortlisted: 0,
+                accepted: 0,
+            },
+        };
     }
 };
