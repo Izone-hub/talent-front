@@ -128,7 +128,7 @@
 
 					<div class="mt-4 card-actions justify-end">
 						<button
-							class="btn gap-2 rounded-lg font-medium text-indigo-600 btn-ghost btn-sm group-hover:bg-indigo-50"
+							class="btn gap-2 whitespace-nowrap rounded-lg font-medium text-indigo-600 btn-ghost btn-sm group-hover:bg-indigo-50"
 							onclick={() => goto(`/jobs?category=${category.dbCategory}`)}
 						>
 							Browse Talent
@@ -138,7 +138,7 @@
 								viewBox="0 0 24 24"
 								stroke-width="2"
 								stroke="currentColor"
-								class="h-4 w-4 transition-transform group-hover:translate-x-1"
+								class="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1"
 							>
 								<path
 									stroke-linecap="round"
@@ -155,7 +155,7 @@
 
 	<div class="mt-14 flex justify-center text-center">
 		<button
-			class="btn h-auto min-h-0 gap-2 rounded-full border-slate-300 bg-white px-8 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:shadow-md"
+			class="btn h-auto min-h-0 gap-2 whitespace-nowrap rounded-full border-slate-300 bg-white px-8 py-3 font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:shadow-md"
 		>
 			View All Categories
 			<svg
@@ -164,7 +164,7 @@
 				viewBox="0 0 24 24"
 				stroke-width="2"
 				stroke="currentColor"
-				class="h-4 w-4"
+				class="h-4 w-4 shrink-0"
 			>
 				<path
 					stroke-linecap="round"

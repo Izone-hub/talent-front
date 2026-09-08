@@ -1,6 +1,7 @@
 <script>
 	/* eslint-disable svelte/no-navigation-without-resolve */
 	import IZoneLogo from '$lib/assets/icons/IZone-logo.png'
+
 </script>
 
 <!-- class="flex min-h-screen flex-col bgGrid bgGradient cursor-glow" -->
@@ -15,7 +16,6 @@
 			</p>
 		</aside>
 		<nav class="flex flex-col gap-2">
-				<h6 class="footer-title">Services</h6>
 				<a href="/" class="link link-hover">Branding</a>
 				<a href="/" class="link link-hover">Design</a>
 				<a href="/" class="link link-hover">Marketing</a>

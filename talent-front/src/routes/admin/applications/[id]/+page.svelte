@@ -172,7 +172,7 @@
             // acceptance_job_id == job_id, so just refresh from the server.
             application = response || application;
             showToast("Application accepted", "success");
-            await loadApplication();
+            await goto("/admin/applications");
         } catch (error) {
             showToast("Failed to accept application", "error");
             console.error(error);
