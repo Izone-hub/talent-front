@@ -9,14 +9,161 @@
     import {
         Loader2, XCircle, ArrowLeft, Github,
         Target, FileText, Briefcase,
-        CheckCircle2, BookOpen, Award
-    } from "@lucide/svelte";
+        CheckCircle2, BookOpen, Award,
+        ThumbsUp, ThumbsDown, MessageSquare, Send,
+        AlertTriangle
+    } from "lucide-svelte";
 
     const id = $page.params.id;
 
     let loading = $state(true);
     let data = $state(null);
     let error = $state("");
+
+    // Feedback state
+    let feedbackRating = $state(null);
+    let feedbackComment = $state("");
+    let feedbackSaving = $state(false);
+    let feedbackLoaded = $state(false);
+    let feedbackSavedMessage = $state(false);
+    let feedbackErrorMessage = $state("");
+    let serverValidationError = $state("");
+    let serverUnreadableWords = $state([]);
+    let existingFeedback = $state(null);
+    let currentApplicationId = $state("");
+    let loadedAttemptId = "";
+    let validationTimer = null;
+
+    const profanePattern = /\b(f(?:uck(?:ing|er|ed|s)?|uk|ck|\*+c?k|u\*+k)|motherf(?:uck(?:ing|er|ed|s)?|\*+c?k)|sh(?:it(?:ty|ting|s)?|t|\*+t|1t)|bullsh(?:it|t|\*+t)|b(?:itch(?:es|y|ing)?|tch|1tch|\*+tch)|ass(?:es|hole|holes|hat)?|dumbass(?:es)?|jackass(?:es)?|bastard(?:s)?|cunt(?:s)?|d(?:ick(?:s|head|heads)?|1ck|\*+ck)|pussy|pussies|cock(?:s|sucker)?|whore(?:s)?|slut(?:s|ty)?|retard(?:ed|s)?|nigger(?:s)?|nigga(?:s)?|faggot(?:s)?|fag(?:s)?|wanker(?:s)?|prick(?:s)?|twat(?:s)?|douche(?:bag)?|blowjob(?:s)?)\b/i;
+    const spacedProfanePattern = /\b(f[\s.\-_*]+u[\s.\-_*]+c[\s.\-_*]+k|s[\s.\-_*]+h[\s.\-_*]+i[\s.\-_*]+t|b[\s.\-_*]+i[\s.\-_*]+t[\s.\-_*]+c[\s.\-_*]+h|c[\s.\-_*]+u[\s.\-_*]+n[\s.\-_*]+t|d[\s.\-_*]+i[\s.\-_*]+c[\s.\-_*]+k)\b/i;
+
+    const archaicAndGibberishWords = new Set([
+        'ere', 'ye', 'thou', 'thee', 'thy', 'thine', 'quoth', 'yclept', 'fain',
+        'hark', 'anon', 'betwixt', 'perchance', 'whilom', 'forsooth', 'eft', 'eke',
+        'ern', 'erst', 'adz', 'ais', 'ala', 'alb', 'ani', 'apo', 'ara', 'erg', 'err',
+        'asdf', 'asdfgh', 'asdfghjkl', 'qwerty', 'zxcv', 'jkl', 'jkljkl', 'xyz'
+    ]);
+
+    function normalizeLeet(text) {
+        return text
+            .toLowerCase()
+            .replace(/[@]/g, 'a')
+            .replace(/[\$5]/g, 's')
+            .replace(/[!1|]/g, 'i')
+            .replace(/[0]/g, 'o')
+            .replace(/[3]/g, 'e');
+    }
+
+    function checkClientGibberish(text) {
+        const tokens = text.match(/[a-zA-Z]+(?:'[a-zA-Z]+)?/g) || [];
+        for (const token of tokens) {
+            const clean = token.toLowerCase().replace(/'/g, '');
+            // Single letters other than 'a' or 'i'
+            if (clean.length === 1 && clean !== 'a' && clean !== 'i') {
+                return { word: token, error: `Unrecognized single-letter word: '${token}'.` };
+            }
+            // 3+ identical consecutive characters (e.g. 'sooooo', 'zzzzz')
+            if (/([a-zA-Z])\1{2,}/.test(clean)) {
+                return { word: token, error: `Unreadable repeated characters in word: '${token}'.` };
+            }
+            // Meaningless / archaic words like 'ere', 'asdf'
+            if (archaicAndGibberishWords.has(clean)) {
+                return { word: token, error: `Unrecognized or meaningless word: '${token}'. Please write meaningful English feedback.` };
+            }
+            // 3+ letter word with no vowels (y counts as vowel)
+            if (clean.length >= 3 && !/[aeiouy]/.test(clean)) {
+                return { word: token, error: `Unreadable or meaningless word: '${token}'. Please write meaningful English feedback.` };
+            }
+            // 5+ consecutive consonants without vowel
+            if (/[bcdfghjklmnpqrstvwxz]{5,}/.test(clean)) {
+                return { word: token, error: `Unreadable consonant sequence in word: '${token}'.` };
+            }
+        }
+        return null;
+    }
+
+    let clientValidationResult = $derived.by(() => {
+        const trimmed = feedbackComment.trim();
+        if (!trimmed) return { error: "", words: [] };
+
+        // 1. Language validation: English printable ASCII only
+        for (let i = 0; i < trimmed.length; i++) {
+            const code = trimmed.charCodeAt(i);
+            if (code === 10 || code === 13 || code === 9) continue; // \n, \r, \t
+            if (code < 32 || code > 126) {
+                return {
+                    error: "Feedback must be written in English using standard Latin characters.",
+                    words: []
+                };
+            }
+        }
+
+        // 2. Profanity validation
+        if (profanePattern.test(trimmed) || spacedProfanePattern.test(trimmed)) {
+            return {
+                error: "Inappropriate or offensive language is not allowed in feedback.",
+                words: []
+            };
+        }
+        const norm = normalizeLeet(trimmed);
+        if (profanePattern.test(norm) || spacedProfanePattern.test(norm)) {
+            return {
+                error: "Inappropriate or offensive language is not allowed in feedback.",
+                words: []
+            };
+        }
+
+        // 3. Gibberish and meaningless words check
+        const gibberish = checkClientGibberish(trimmed);
+        if (gibberish) {
+            return {
+                error: gibberish.error,
+                words: [gibberish.word]
+            };
+        }
+
+        return { error: "", words: [] };
+    });
+
+    let activeValidationError = $derived(
+        clientValidationResult.error || serverValidationError || ""
+    );
+
+    let activeUnreadableWords = $derived(
+        clientValidationResult.words.length > 0
+            ? clientValidationResult.words
+            : serverUnreadableWords
+    );
+
+    // Debounced server dictionary validation
+    $effect(() => {
+        const comment = feedbackComment.trim();
+        if (!comment || clientValidationResult.error) {
+            serverValidationError = "";
+            serverUnreadableWords = [];
+            return;
+        }
+
+        if (validationTimer) clearTimeout(validationTimer);
+        validationTimer = setTimeout(async () => {
+            try {
+                const res = await quizService.validateQuizResultFeedback(id, comment);
+                if (res && res.valid === false) {
+                    serverValidationError = res.error || "Unrecognized or meaningless words detected.";
+                    serverUnreadableWords = res.unreadable_words || [];
+                } else {
+                    serverValidationError = "";
+                    serverUnreadableWords = [];
+                }
+            } catch {
+                // If server is temporarily unreachable, client-side check continues
+            }
+        }, 300);
+
+        return () => {
+            if (validationTimer) clearTimeout(validationTimer);
+        };
+    });
 
     function initials(name) {
         if (!name) return "?";
@@ -94,6 +241,8 @@
             goto("/auth");
             return;
         }
+        if (loadedAttemptId === id) return;
+        loadedAttemptId = id;
         loadData();
     });
 
@@ -107,7 +256,8 @@
         // The intelligence endpoint expects a USER id (NOT the quiz attempt id from
         // the URL). Client users see their own report; admins pass ?user_id=.
         const search = $page.url.searchParams;
-        const applicationId = search.get("application_id");
+        const applicationId = search.get("application_id") || "";
+        if (applicationId) currentApplicationId = applicationId;
         const targetId = search.get("user_id") || uid;
 
         // Job context so the header can tell users WHICH job this attempt belongs
@@ -266,6 +416,56 @@
         }
         // Hide query params from URL after reading them
         replaceState($page.url.pathname);
+
+        // Load existing feedback
+        loadFeedback();
+    }
+
+    async function loadFeedback() {
+        try {
+            const result = await quizService.getQuizResultFeedback(id);
+            if (result && (result.rating || result.comment)) {
+                existingFeedback = result;
+                if (!feedbackRating && result.rating) {
+                    feedbackRating = result.rating;
+                }
+                if (!feedbackComment && result.comment) {
+                    feedbackComment = result.comment;
+                }
+            } else {
+                existingFeedback = null;
+            }
+        } catch {
+            existingFeedback = null;
+        } finally {
+            feedbackLoaded = true;
+        }
+    }
+
+    async function submitFeedback() {
+        if (feedbackSaving || Boolean(activeValidationError)) return;
+        feedbackSaving = true;
+        feedbackErrorMessage = "";
+        try {
+            const rating = feedbackRating || "positive";
+            const result = await quizService.saveQuizResultFeedback(id, rating, feedbackComment);
+            existingFeedback = result;
+            if (!feedbackRating) {
+                feedbackRating = rating;
+            }
+            feedbackSavedMessage = true;
+            setTimeout(() => {
+                feedbackSavedMessage = false;
+            }, 5000);
+        } catch (e) {
+            console.error("Failed to save feedback:", e);
+            feedbackErrorMessage = e.message || "Failed to submit feedback.";
+            if (e.message && (e.message.includes("already been submitted") || e.message.includes("conflict"))) {
+                await loadFeedback();
+            }
+        } finally {
+            feedbackSaving = false;
+        }
     }
 </script>
 
@@ -547,6 +747,146 @@
                         </table>
                     </div>
                 </div>
+            {/if}
+
+            <!-- Feedback -->
+            {#if feedbackLoaded || (!loading && data)}
+                {#if existingFeedback && (existingFeedback.rating || existingFeedback.comment)}
+                    <!-- One-Time Feedback: Read-only Confirmation Card -->
+                    <div class="mb-6 rounded-2xl border border-emerald-200/70 bg-white p-6 shadow-sm ring-1 ring-emerald-500/10">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60">
+                                    <CheckCircle2 class="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-slate-800">Feedback Submitted</h3>
+                                    <p class="text-xs text-slate-400">Your candidate experience review has been recorded (one-time submission).</p>
+                                </div>
+                            </div>
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                Response Recorded
+                            </span>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 mb-3">
+                            {#if existingFeedback.rating === 'positive'}
+                                <div class="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                                    <ThumbsUp class="h-3.5 w-3.5" />
+                                    Helpful experience
+                                </div>
+                            {:else if existingFeedback.rating === 'negative'}
+                                <div class="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-700 ring-1 ring-red-200">
+                                    <ThumbsDown class="h-3.5 w-3.5" />
+                                    Not helpful experience
+                                </div>
+                            {/if}
+                            {#if existingFeedback.created_at}
+                                <span class="text-xs text-slate-400">
+                                    Recorded on {new Date(existingFeedback.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                            {/if}
+                        </div>
+
+                        {#if existingFeedback.comment}
+                            <div class="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                                <span class="text-[11px] font-medium uppercase tracking-wider text-slate-400 block mb-1">Your Comment</span>
+                                <p class="text-sm italic text-slate-700 whitespace-pre-wrap leading-relaxed">"{existingFeedback.comment}"</p>
+                            </div>
+                        {/if}
+                    </div>
+                {:else}
+                    <!-- Interactive Feedback Submission (Available Only Once) -->
+                    <div class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2">
+                                <MessageSquare class="h-4 w-4 text-indigo-600" />
+                                <h3 class="text-sm font-medium text-slate-700">How was your experience?</h3>
+                            </div>
+                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">One-time submission</span>
+                        </div>
+
+                        <div class="flex items-center gap-3 mb-4">
+                            <button
+                                type="button"
+                                onclick={() => feedbackRating = feedbackRating === 'positive' ? null : 'positive'}
+                                class="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all {feedbackRating === 'positive' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}"
+                            >
+                                <ThumbsUp class="h-4 w-4" />
+                                Helpful
+                            </button>
+                            <button
+                                type="button"
+                                onclick={() => feedbackRating = feedbackRating === 'negative' ? null : 'negative'}
+                                class="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all {feedbackRating === 'negative' ? 'bg-red-50 text-red-700 ring-1 ring-red-200' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}"
+                            >
+                                <ThumbsDown class="h-4 w-4" />
+                                Not helpful
+                            </button>
+                        </div>
+
+                        <textarea
+                            bind:value={feedbackComment}
+                            spellcheck="true"
+                            placeholder="Tell us more about your experience in English..."
+                            maxlength="1000"
+                            rows="3"
+                            class="w-full rounded-xl border px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none transition-colors {activeValidationError ? 'border-red-400 bg-red-50/20 focus:border-red-500 focus:ring-1 focus:ring-red-400' : 'border-slate-200 bg-slate-50 focus:border-indigo-300 focus:bg-white focus:ring-1 focus:ring-indigo-300'}"
+                        ></textarea>
+
+                        {#if activeValidationError}
+                            <div class="mt-2 rounded-xl border border-red-200 bg-red-50/80 p-3 text-xs text-red-700">
+                                <div class="flex items-center gap-1.5 font-medium">
+                                    <AlertTriangle class="h-4 w-4 shrink-0 text-red-500" />
+                                    <span>{activeValidationError}</span>
+                                </div>
+                                {#if activeUnreadableWords.length > 0}
+                                    <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-red-200/60 pt-2">
+                                        <span class="text-[11px] font-medium text-red-600">Flagged meaningless/unreadable:</span>
+                                        {#each activeUnreadableWords as w}
+                                            <span class="inline-flex items-center rounded-md bg-white px-2 py-0.5 font-mono text-xs font-semibold text-red-700 border border-red-300 shadow-2xs underline decoration-wavy decoration-red-500">
+                                                {w}
+                                            </span>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
+
+                        {#if feedbackErrorMessage && !activeValidationError}
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-red-600">
+                                <AlertTriangle class="h-3.5 w-3.5 shrink-0" />
+                                <span>{feedbackErrorMessage}</span>
+                            </div>
+                        {/if}
+
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onclick={submitFeedback}
+                                    disabled={feedbackSaving || Boolean(activeValidationError) || (!feedbackRating && !feedbackComment.trim())}
+                                    class="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                                >
+                                    {#if feedbackSaving}
+                                        <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                                        Submitting...
+                                    {:else}
+                                        <Send class="h-3.5 w-3.5" />
+                                        Submit feedback
+                                    {/if}
+                                </button>
+                                {#if feedbackSavedMessage}
+                                    <span class="text-xs text-emerald-600 font-medium">Thanks for your feedback!</span>
+                                {/if}
+                            </div>
+                            <span class="text-[11px] text-slate-400">English words only • Inappropriate or meaningless words prohibited</span>
+                        </div>
+                    </div>
+                {/if}
             {/if}
 
             <!-- Bottom Actions -->
