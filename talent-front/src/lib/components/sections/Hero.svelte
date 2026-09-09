@@ -30,7 +30,7 @@
 	<div class="flex gap-4">
 		<button
 			on:click={handleExploreJobs}
-			class="btn h-auto min-h-0 gap-2 rounded-xl border-none bg-violet-600 px-10 py-3 text-base font-bold text-white shadow-lg transition-all btn-primary hover:-translate-y-1 hover:bg-violet-700 hover:shadow-xl"
+			class="btn h-auto min-h-0 gap-2 whitespace-nowrap rounded-xl border-none bg-violet-600 px-10 py-3 text-base font-bold text-white shadow-lg transition-all btn-primary hover:-translate-y-1 hover:bg-violet-700 hover:shadow-xl"
 		>
 			Explore Jobs
 			<svg
@@ -39,7 +39,7 @@
 				viewBox="0 0 24 24"
 				stroke-width="2"
 				stroke="currentColor"
-				class="h-5 w-5"
+				class="h-5 w-5 shrink-0"
 			>
 				<path
 					stroke-linecap="round"
