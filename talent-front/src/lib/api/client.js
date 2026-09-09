@@ -1,5 +1,5 @@
 // Base API client with authentication handling
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 class ApiClient {
 	constructor() {
@@ -7,7 +7,10 @@ class ApiClient {
 	}
 
 	async request(endpoint, options = {}) {
-		const url = `${this.baseUrl}${endpoint}`;
+		const normalizedEndpoint = endpoint.startsWith('/api/v1/')
+			? endpoint
+			: `/api/v1${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+		const url = `${this.baseUrl}${this.baseUrl.endsWith('/api/v1') ? normalizedEndpoint.replace(/^\/api\/v1/, '') : normalizedEndpoint}`;
 
 		const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 
