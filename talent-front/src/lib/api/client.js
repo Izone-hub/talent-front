@@ -11,6 +11,9 @@ class ApiClient {
 			? endpoint
 			: `/api/v1${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 		const url = `${this.baseUrl}${this.baseUrl.endsWith('/api/v1') ? normalizedEndpoint.replace(/^\/api\/v1/, '') : normalizedEndpoint}`;
+		const timeoutMs = options.timeoutMs ?? 15000;
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
 		const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 
@@ -28,6 +31,7 @@ class ApiClient {
 		const fetchOptions = {
 			...defaultOptions,
 			...options,
+			signal: controller.signal,
 			headers: {
 				...defaultOptions.headers,
 				...options.headers,
@@ -64,8 +68,13 @@ class ApiClient {
 
 			return data;
 		} catch (error) {
+			if (error.name === 'AbortError') {
+				throw new Error(`API request timed out after ${timeoutMs / 1000} seconds`);
+			}
 			console.error(`API Error (${endpoint}):`, error);
 			throw error;
+		} finally {
+			clearTimeout(timeoutId);
 		}
 	}
 

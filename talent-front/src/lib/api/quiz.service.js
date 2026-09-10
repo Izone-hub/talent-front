@@ -58,26 +58,24 @@ export const quizService = {
 	saveQuizResult: (quizId, data) => {
 		if (typeof window === 'undefined') return;
 		try {
-			localStorage.setItem(`quiz_result_${quizId}`, JSON.stringify(data));
+			// Do not store answer keys or detailed answers in client storage
+			const { answers, ...summary } = data || {};
+			localStorage.setItem(`quiz_result_${quizId}`, JSON.stringify(summary));
 		} catch (e) {
 			console.warn('Failed to save quiz result locally:', e);
 		}
 	},
 
-	getResult: async (quizId, userId) => {
-		if (typeof window !== 'undefined') {
-			try {
-				const cached = localStorage.getItem(`quiz_result_${quizId}`);
-				if (cached) {
-					const parsed = JSON.parse(cached);
-					return parsed;
-				}
-			} catch (e) {
-				// ignore parse errors
-			}
-		}
+	getResult: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/result`);
+	},
 
-		return apiClient.get(`/quizzes/${quizId}/review`);
+	getReviewQuestions: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/review-questions`);
+	},
+
+	getQuestionDetail: async (quizId, questionId) => {
+		return apiClient.get(`/quizzes/${quizId}/questions/${questionId}`);
 	},
 
 	// Quiz result feedback

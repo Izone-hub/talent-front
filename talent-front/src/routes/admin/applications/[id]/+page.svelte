@@ -22,19 +22,26 @@
 
     let activeTab = $state("overview");
 
+    let currentLoadedId = "";
     $effect(() => {
-        applicationId = $page.params.id;
-        loadApplication();
+        const id = $page.params.id;
+        if (id && id !== currentLoadedId) {
+            currentLoadedId = id;
+            applicationId = id;
+            loadApplication(id);
+        }
     });
 
-    async function loadCandidateFeedback() {
-        if (!applicationId) return;
+    async function loadCandidateFeedback(targetId, appData) {
+        const aid = targetId || applicationId;
+        if (!aid) return;
         loadingFeedback = true;
         try {
             const hasFbData = (f) => !!(f && (getVal(f, "rating", "Rating") || getVal(f, "comment", "Comment")));
-            let fb = await applicationService.getCandidateFeedback(applicationId);
-            if (!hasFbData(fb) && application) {
-                const quizId = getVal(application, "QuizID", "quiz_id", "QuizId");
+            let fb = await applicationService.getCandidateFeedback(aid);
+            const currentApp = appData || application;
+            if (!hasFbData(fb) && currentApp) {
+                const quizId = getVal(currentApp, "QuizID", "quiz_id", "QuizId");
                 if (quizId) {
                     try {
                         const quizFb = await quizService.getQuizResultFeedback(quizId);
@@ -58,15 +65,15 @@
         }
     }
 
-    async function loadApplication() {
+    async function loadApplication(idToLoad) {
+        const targetId = idToLoad || applicationId || $page.params.id;
+        if (!targetId) return;
         loading = true;
         accessDenied = false;
         try {
-            const data = await applicationService.getApplicationDetail(applicationId);
-            const status = (data?.Status || data?.status || "").toLowerCase();
-            if (status !== "quiz_completed") {
+            const data = await applicationService.getApplicationDetail(targetId);
+            if (!data) {
                 application = null;
-                accessDenied = true;
                 return;
             }
             application = data;
@@ -79,7 +86,7 @@
                     created_at: data.CandidateFeedbackCreatedAt || data.candidate_feedback_created_at
                 };
             }
-            loadCandidateFeedback();
+            loadCandidateFeedback(targetId, data);
 
             const userId = getVal(data, "UserID", "user_id", "UserId");
             if (userId) {
@@ -120,7 +127,10 @@
     }
 
     function isFinishedQuiz() {
-        return (application?.Status || application?.status || "").toLowerCase() === "quiz_completed";
+        const s = (application?.Status || application?.status || "").toLowerCase();
+        const score = application?.QuizScore ?? application?.quiz_score;
+        return ["quiz_completed", "accepted", "rejected", "shortlisted", "interviewed", "under_review"].includes(s) ||
+               (score != null && score !== "");
     }
 
     // Canonical acceptance check: an applicant is accepted for this job only
@@ -349,28 +359,26 @@
                 </div>
             </div>
 
-        {:else if !application || accessDenied}
+        {:else if !application}
             <div class="flex min-h-[60vh] items-center justify-center">
                 <div class="text-center max-w-md">
                     <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
                         <BrainCircuit size={32} class="text-gray-400" />
                     </div>
                     <h3 class="text-xl font-semibold text-gray-900">
-                        {accessDenied ? "Quiz Not Completed" : "Application Not Found"}
+                        Application Not Found
                     </h3>
                     <p class="mt-2 text-sm text-gray-500">
-                        {accessDenied
-                            ? "This application hasn't completed the quiz yet. Only quiz-completed applications are visible."
-                            : "The application you're looking for doesn't exist or has been removed."}
+                        The application you're looking for doesn't exist or has been removed.
                     </p>
-                    <button onclick={goBack} class="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    <a href="/admin/applications" class="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                         <ChevronLeft size={16} />
                         Back to Applications
-                    </button>
+                    </a>
                 </div>
             </div>
 
-        {:else if isFinishedQuiz()}
+        {:else}
 
         <!-- Top Navigation Bar -->
         <div class="mb-6 flex items-center justify-between">
@@ -1052,6 +1060,15 @@
 
                 <!-- Tab: Quiz -->
                 {#if activeTab === 'quiz'}
+                    {#if !isFinishedQuiz()}
+                        <div class="rounded-2xl bg-white p-12 text-center shadow-sm ring-1 ring-gray-200/50">
+                            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                                <Clock size={28} />
+                            </div>
+                            <h3 class="text-sm font-semibold text-gray-700">Quiz Assessment Pending</h3>
+                            <p class="mt-1 text-xs text-gray-400 max-w-xs mx-auto">This candidate has not completed the assessment yet (Status: {(application?.Status || application?.status || 'Pending').replace(/_/g, ' ')}).</p>
+                        </div>
+                    {:else}
                     <div class="space-y-4">
                         <!-- Score Card with Circular Progress -->
                         <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200/50">
@@ -1196,6 +1213,7 @@
                             {/if}
                         </div>
                     </div>
+                    {/if}
                 {/if}
             </div>
         </div>

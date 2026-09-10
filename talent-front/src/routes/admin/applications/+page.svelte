@@ -1,5 +1,6 @@
 <script>
     import { goto } from '$app/navigation';
+    import { onMount } from 'svelte';
     import { applicationService } from '$lib/api/application.service';
     import EmptyState from '$lib/components/ui/EmptyState.svelte';
     import AdminPageHeader from '$lib/components/ui/AdminPageHeader.svelte';
@@ -46,8 +47,7 @@
     let expandedCard = $state(null);
     let appPages = $state({});
     let showAllJobs = $state(false);
-    // At least 10 applicants are shown at once so a phone-sized viewport can
-    // still see a full page of applicants without scrolling pagination.
+
     const APPS_PER_PAGE = 10;
     const INITIAL_JOBS = 4;
     const QUIZ_CARD_PAGE_SIZE = 10;
@@ -60,55 +60,39 @@
         internship: 'Internship',
     };
 
-    let loadStarted = false;
-    $effect(() => {
-        if (loadStarted) return;
-        loadStarted = true;
+    function fetchFeedbackForApps(appList) {
+        if (!appList || !Array.isArray(appList)) return;
+        appList.forEach(app => {
+            const appId = app.application_id || app.ID || app.id;
+            if (!appId) return;
+
+            // If feedback fields are already present from backend join, cache directly without network requests
+            const hasFbFields = ('candidate_feedback_rating' in app) || ('CandidateFeedbackRating' in app);
+            if (hasFbFields) {
+                const rating = getVal(app, 'candidate_feedback_rating', 'CandidateFeedbackRating', 'feedback_rating', 'FeedbackRating');
+                const comment = getVal(app, 'candidate_feedback_comment', 'CandidateFeedbackComment', 'feedback_comment', 'FeedbackComment');
+                candidateFeedbacks[appId] = (rating || comment) ? { rating, comment } : null;
+                return;
+            }
+
+            if (candidateFeedbacks[appId] === undefined) {
+                candidateFeedbacks[appId] = null;
+                applicationService.getCandidateFeedback(appId).then(fb => {
+                    if (fb && (fb.rating || fb.comment || fb.Rating || fb.Comment)) {
+                        candidateFeedbacks[appId] = fb;
+                    }
+                }).catch(() => {});
+            }
+        });
+    }
+
+    onMount(() => {
         loadOverview();
     });
 
-    $effect(() => {
-        if (quizCandidates && quizCandidates.length > 0) {
-            const topCandidates = quizCandidates.slice(0, QUIZ_CARD_PAGE_SIZE);
-            topCandidates.forEach(c => {
-                const appId = c.application_id || c.ID;
-                if (appId && candidateFeedbacks[appId] === undefined) {
-                    candidateFeedbacks[appId] = null;
-                    applicationService.getCandidateFeedback(appId).then(fb => {
-                        if (fb && (fb.rating || fb.comment || fb.Rating || fb.Comment)) {
-                            candidateFeedbacks = { ...candidateFeedbacks, [appId]: fb };
-                        }
-                    }).catch(() => {});
-                }
-            });
-        }
-    });
-
-    $effect(() => {
-        if (expandedCard && expandedCard !== 'quiz-completed') {
-            const apps = getPageApps(expandedCard);
-            apps.forEach(app => {
-                const appId = app.ID || app.id;
-                if (appId && candidateFeedbacks[appId] === undefined) {
-                    candidateFeedbacks[appId] = null;
-                    applicationService.getCandidateFeedback(appId).then(fb => {
-                        if (fb && (fb.rating || fb.comment || fb.Rating || fb.Comment)) {
-                            candidateFeedbacks = { ...candidateFeedbacks, [appId]: fb };
-                        }
-                    }).catch(() => {});
-                }
-            });
-        }
-    });
-
-    // Jobs arrive pre-sorted by applicant count from the backend; keep them in
-    // that order for the "most applicants first" listing.
-    let sortedJobs = $derived(() => [...jobs]);
-
-    let visibleJobs = $derived(() => {
-        const all = sortedJobs();
-        return showAllJobs ? all : all.slice(0, INITIAL_JOBS);
-    });
+    // Jobs arrive pre-sorted by applicant count from the backend
+    let sortedJobs = $derived([...jobs]);
+    let visibleJobs = $derived(showAllJobs ? sortedJobs : sortedJobs.slice(0, INITIAL_JOBS));
 
     // ---- Overview stat cards (values come straight from the server) ----
     function getStatCards() {
@@ -124,9 +108,10 @@
         loading = true;
         try {
             const overview = await applicationService.getAdminApplicationsOverview();
-            jobs = overview.jobs;
-            quizCandidates = overview.quizCandidates;
-            summary = overview.summary;
+            jobs = overview.jobs || [];
+            quizCandidates = overview.quizCandidates || [];
+            summary = overview.summary || { total_applicants: 0, quiz_done: 0, shortlisted: 0, accepted: 0 };
+            fetchFeedbackForApps(quizCandidates.slice(0, QUIZ_CARD_PAGE_SIZE));
         } catch (error) {
             console.error('Failed to load applications overview:', error);
             jobs = [];
@@ -141,7 +126,9 @@
         loadingApps = true;
         try {
             const data = await applicationService.getJobApplications(jobId);
-            jobApps = { ...jobApps, [jobId]: Array.isArray(data) ? data : [] };
+            const list = Array.isArray(data) ? data : [];
+            jobApps[jobId] = list;
+            fetchFeedbackForApps(list);
         } catch (error) {
             console.error('Failed to load applications:', error);
         } finally {
@@ -166,12 +153,14 @@
         const maxPage = Math.ceil(apps.length / APPS_PER_PAGE) - 1;
         if ((appPages[jobId] || 0) < maxPage) {
             appPages = { ...appPages, [jobId]: (appPages[jobId] || 0) + 1 };
+            fetchFeedbackForApps(getPageApps(jobId));
         }
     }
 
     function prevPage(jobId) {
         if ((appPages[jobId] || 0) > 0) {
             appPages = { ...appPages, [jobId]: (appPages[jobId] || 0) - 1 };
+            fetchFeedbackForApps(getPageApps(jobId));
         }
     }
 
@@ -351,12 +340,16 @@
                                     {@const appId = app.application_id || app.ID}
                                     {@const name = app.applicant_name || app.ApplicantName || app.applicant_github_username || 'Applicant'}
                                     {@const score = app.quiz_score ?? 0}
-                                    {@const fb = candidateFeedbacks[appId]}
+                                    {@const fb = candidateFeedbacks[appId] || {
+                                        rating: getVal(app, 'candidate_feedback_rating', 'CandidateFeedbackRating'),
+                                        comment: getVal(app, 'candidate_feedback_comment', 'CandidateFeedbackComment')
+                                    }}
                                     {@const fbComment = getVal(fb, 'comment', 'Comment')}
                                     {@const fbRating = getVal(fb, 'rating', 'Rating')}
-                                    <div
+                                    <a
+                                        href="/admin/applications/{appId}"
                                         class="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100 hover:border-amber-300 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-                                        onclick={(e) => { e.stopPropagation(); goto(`/admin/applications/${appId}`); }}
+                                        onclick={(e) => e.stopPropagation()}
                                     >
                                         {#if i === 0}
                                             <span class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-sm">
@@ -396,7 +389,7 @@
                                             <Star size={10} />
                                             {score}%
                                         </span>
-                                    </div>
+                                    </a>
                                 {/each}
                             </div>
                             {#if quizCandidates.length > QUIZ_CARD_PAGE_SIZE}
@@ -412,7 +405,7 @@
             <!-- ============================================================ -->
             <!-- Job Cards with their applicant lists                          -->
             <!-- ============================================================ -->
-            {#each visibleJobs() as job (job.id || job.ID)}
+            {#each visibleJobs as job (job.id || job.ID)}
                 {@const id = job.id || job.ID}
                 {@const count = jobCount(job)}
                 {@const catCfg = getCategoryConfig(job.category || job.Category || 'other')}
@@ -540,12 +533,16 @@
                                         {@const name = getApplicantName(app)}
                                         {@const gh = getVal(app, 'github_username', 'GithubUsername')}
                                         {@const appDate = app.SubmittedAt || app.submitted_at}
-                                        {@const fb = candidateFeedbacks[appId]}
+                                        {@const fb = candidateFeedbacks[appId] || {
+                                            rating: getVal(app, 'CandidateFeedbackRating', 'candidate_feedback_rating'),
+                                            comment: getVal(app, 'CandidateFeedbackComment', 'candidate_feedback_comment')
+                                        }}
                                         {@const fbComment = getVal(fb, 'comment', 'Comment')}
                                         {@const fbRating = getVal(fb, 'rating', 'Rating')}
-                                        <div
+                                        <a
+                                            href="/admin/applications/{appId}"
                                             class="group/app flex items-center gap-2.5 sm:gap-3 px-3 py-2.5 rounded-xl bg-white border border-gray-100 hover:border-purple-200 hover:bg-purple-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-                                            onclick={(e) => { e.stopPropagation(); goto(`/admin/applications/${appId}`); }}
+                                            onclick={(e) => e.stopPropagation()}
                                         >
                                             <div
                                                 class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0 ring-2 ring-purple-50"
@@ -596,7 +593,7 @@
                                                 </span>
                                                 <ArrowRight size={14} class="hidden sm:block text-gray-200 group-hover/app:text-purple-500 group-hover/app:translate-x-0.5 transition-all" />
                                             </div>
-                                        </div>
+                                        </a>
                                     {/each}
                                 </div>
 
@@ -612,7 +609,7 @@
                                             Prev
                                         </button>
                                         <div class="flex items-center gap-1.5">
-                                            {#each Array(totalPages) as _, i}
+                                            {#each Array.from({ length: totalPages }) as _, i}
                                                 <button
                                                     class="w-7 h-7 rounded-lg text-xs font-bold transition-all
                                                     {i === (appPages[id] || 0)
