@@ -58,6 +58,12 @@
 		rejected: applications.filter((app) => isApplicationRejected(app.Status)).length,
 	});
 
+	$effect(() => {
+		if (activeTab !== "all" && (tabCounts[activeTab] || 0) === 0) {
+			activeTab = "all";
+		}
+	});
+
 	const filteredApplications = $derived.by(() => {
 		if (activeTab === "active") {
 			return applications.filter((app) => isApplicationActive(app.Status));
@@ -265,46 +271,49 @@
                         <Send class="h-5 w-5" />
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-slate-900">{stats.total}</div>
+                        <div class="text-xl font-bold text-slate-900">{tabCounts.all}</div>
                         <div class="text-xs font-medium text-slate-400">Total</div>
                     </div>
                 </button>
                 <button
                     type="button"
-                    onclick={() => activeTab = 'active'}
-                    class="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm text-left transition cursor-pointer {activeTab === 'active' ? 'border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200/70 hover:border-slate-300'}"
+                    onclick={() => { if (tabCounts.active > 0) activeTab = 'active'; }}
+                    disabled={tabCounts.active === 0}
+                    class="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm text-left transition {tabCounts.active > 0 ? 'cursor-pointer hover:border-slate-300' : 'cursor-default opacity-60'} {activeTab === 'active' ? 'border-blue-500 ring-2 ring-blue-200 shadow-sm' : 'border-slate-200/70'}"
                 >
                     <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-200/70">
                         <Activity class="h-5 w-5" />
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-slate-900">{stats.active}</div>
+                        <div class="text-xl font-bold text-slate-900">{tabCounts.active}</div>
                         <div class="text-xs font-medium text-slate-400">In Progress</div>
                     </div>
                 </button>
                 <button
                     type="button"
-                    onclick={() => activeTab = 'accepted'}
-                    class="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm text-left transition cursor-pointer {activeTab === 'accepted' ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-sm' : 'border-slate-200/70 hover:border-slate-300'}"
+                    onclick={() => { if (tabCounts.accepted > 0) activeTab = 'accepted'; }}
+                    disabled={tabCounts.accepted === 0}
+                    class="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm text-left transition {tabCounts.accepted > 0 ? 'cursor-pointer hover:border-slate-300' : 'cursor-default opacity-60'} {activeTab === 'accepted' ? 'border-emerald-500 ring-2 ring-emerald-200 shadow-sm' : 'border-slate-200/70'}"
                 >
                     <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/70">
                         <CheckCircle2 class="h-5 w-5" />
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-slate-900">{stats.accepted}</div>
+                        <div class="text-xl font-bold text-slate-900">{tabCounts.accepted}</div>
                         <div class="text-xs font-medium text-slate-400">Accepted</div>
                     </div>
                 </button>
                 <button
                     type="button"
-                    onclick={() => activeTab = 'rejected'}
-                    class="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm text-left transition cursor-pointer {activeTab === 'rejected' ? 'border-slate-500 ring-2 ring-slate-200 shadow-sm' : 'border-slate-200/70 hover:border-slate-300'}"
+                    onclick={() => { if (tabCounts.rejected > 0) activeTab = 'rejected'; }}
+                    disabled={tabCounts.rejected === 0}
+                    class="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm text-left transition {tabCounts.rejected > 0 ? 'cursor-pointer hover:border-slate-300' : 'cursor-default opacity-60'} {activeTab === 'rejected' ? 'border-slate-500 ring-2 ring-slate-200 shadow-sm' : 'border-slate-200/70'}"
                 >
                     <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                         <ThumbsDown class="h-5 w-5" />
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-slate-900">{stats.rejected}</div>
+                        <div class="text-xl font-bold text-slate-900">{tabCounts.rejected}</div>
                         <div class="text-xs font-medium text-slate-400">Not Selected</div>
                     </div>
                 </button>
@@ -392,27 +401,33 @@
                     >
                         All ({tabCounts.all})
                     </button>
-                    <button
-                        type="button"
-                        onclick={() => activeTab = 'active'}
-                        class="rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer {activeTab === 'active' ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}"
-                    >
-                        In Progress ({tabCounts.active})
-                    </button>
-                    <button
-                        type="button"
-                        onclick={() => activeTab = 'accepted'}
-                        class="rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer {activeTab === 'accepted' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}"
-                    >
-                        Accepted ({tabCounts.accepted})
-                    </button>
-                    <button
-                        type="button"
-                        onclick={() => activeTab = 'rejected'}
-                        class="rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer {activeTab === 'rejected' ? 'bg-slate-800 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}"
-                    >
-                        Not Selected ({tabCounts.rejected})
-                    </button>
+                    {#if tabCounts.active > 0}
+                        <button
+                            type="button"
+                            onclick={() => activeTab = 'active'}
+                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer {activeTab === 'active' ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}"
+                        >
+                            In Progress ({tabCounts.active})
+                        </button>
+                    {/if}
+                    {#if tabCounts.accepted > 0}
+                        <button
+                            type="button"
+                            onclick={() => activeTab = 'accepted'}
+                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer {activeTab === 'accepted' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}"
+                        >
+                            Accepted ({tabCounts.accepted})
+                        </button>
+                    {/if}
+                    {#if tabCounts.rejected > 0}
+                        <button
+                            type="button"
+                            onclick={() => activeTab = 'rejected'}
+                            class="rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer {activeTab === 'rejected' ? 'bg-slate-800 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}"
+                        >
+                            Not Selected ({tabCounts.rejected})
+                        </button>
+                    {/if}
                 </div>
             </div>
 
