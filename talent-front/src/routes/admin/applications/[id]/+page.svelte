@@ -2,7 +2,8 @@
     import { page } from "$app/stores";
     import { applicationService } from "$lib/api/application.service";
     import { intelligenceService } from "$lib/api/intelligence.service";
-    import { ExternalLink, BrainCircuit, GitBranch, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy, User, Mail, Calendar, MapPin, Link, Star, Clock, Award, ThumbsUp, ThumbsDown, Sparkles, FileText, Code2 } from "lucide-svelte";
+    import { quizService } from "$lib/api/quiz.service";
+    import { ExternalLink, BrainCircuit, GitBranch, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy, User, Mail, Calendar, MapPin, Link, Star, Clock, Award, ThumbsUp, ThumbsDown, Sparkles, FileText, Code2, MessageSquare } from "lucide-svelte";
     import { showToast } from "$lib/stores/toast";
     import { goto } from "$app/navigation";
 
@@ -16,25 +17,76 @@
     let loadingIntelligence = $state(false);
     let accessDenied = $state(false);
 
+    let candidateFeedback = $state(null);
+    let loadingFeedback = $state(false);
+
     let activeTab = $state("overview");
 
+    let currentLoadedId = "";
     $effect(() => {
-        applicationId = $page.params.id;
-        loadApplication();
+        const id = $page.params.id;
+        if (id && id !== currentLoadedId) {
+            currentLoadedId = id;
+            applicationId = id;
+            loadApplication(id);
+        }
     });
 
-    async function loadApplication() {
+    async function loadCandidateFeedback(targetId, appData) {
+        const aid = targetId || applicationId;
+        if (!aid) return;
+        loadingFeedback = true;
+        try {
+            const hasFbData = (f) => !!(f && (getVal(f, "rating", "Rating") || getVal(f, "comment", "Comment")));
+            let fb = await applicationService.getCandidateFeedback(aid);
+            const currentApp = appData || application;
+            if (!hasFbData(fb) && currentApp) {
+                const quizId = getVal(currentApp, "QuizID", "quiz_id", "QuizId");
+                if (quizId) {
+                    try {
+                        const quizFb = await quizService.getQuizResultFeedback(quizId);
+                        if (hasFbData(quizFb)) {
+                            fb = quizFb;
+                        }
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+            if (hasFbData(fb)) {
+                candidateFeedback = fb;
+            } else {
+                candidateFeedback = null;
+            }
+        } catch (err) {
+            console.error("Failed to load candidate feedback:", err);
+        } finally {
+            loadingFeedback = false;
+        }
+    }
+
+    async function loadApplication(idToLoad) {
+        const targetId = idToLoad || applicationId || $page.params.id;
+        if (!targetId) return;
         loading = true;
         accessDenied = false;
         try {
-            const data = await applicationService.getApplicationDetail(applicationId);
-            const status = (data?.Status || data?.status || "").toLowerCase();
-            if (status !== "quiz_completed") {
+            const data = await applicationService.getApplicationDetail(targetId);
+            if (!data) {
                 application = null;
-                accessDenied = true;
                 return;
             }
             application = data;
+            if (data?.CandidateFeedback || data?.candidate_feedback) {
+                candidateFeedback = data.CandidateFeedback || data.candidate_feedback;
+            } else if (data?.rating || data?.Rating || data?.comment || data?.Comment) {
+                candidateFeedback = {
+                    rating: data.rating || data.Rating,
+                    comment: data.comment || data.Comment,
+                    created_at: data.CandidateFeedbackCreatedAt || data.candidate_feedback_created_at
+                };
+            }
+            loadCandidateFeedback(targetId, data);
 
             const userId = getVal(data, "UserID", "user_id", "UserId");
             if (userId) {
@@ -75,7 +127,10 @@
     }
 
     function isFinishedQuiz() {
-        return (application?.Status || application?.status || "").toLowerCase() === "quiz_completed";
+        const s = (application?.Status || application?.status || "").toLowerCase();
+        const score = application?.QuizScore ?? application?.quiz_score;
+        return ["quiz_completed", "accepted", "rejected", "shortlisted", "interviewed", "under_review"].includes(s) ||
+               (score != null && score !== "");
     }
 
     // Canonical acceptance check: an applicant is accepted for this job only
@@ -227,6 +282,31 @@
     const applicantPhone = $derived(getVal(application, "PhoneNumber", "phone_number"));
     const applicantSubmitted = $derived(application?.SubmittedAt || application?.submitted_at);
     const coverLetter = $derived(getVal(application, "CoverLetter", "cover_letter", "CoverLetterText"));
+    const applicantNotes = $derived(getVal(application, "Notes", "notes"));
+    const employerFeedback = $derived(getVal(application, "EmployerFeedback", "employer_feedback"));
+
+    const feedbackRating = $derived(
+        getVal(candidateFeedback, "rating", "Rating") ||
+        getVal(application, "CandidateFeedbackRating", "candidate_feedback_rating", "Rating", "rating") ||
+        getVal(application?.CandidateFeedback, "rating", "Rating") ||
+        getVal(application?.candidate_feedback, "rating", "Rating") ||
+        ""
+    );
+    const feedbackComment = $derived(
+        getVal(candidateFeedback, "comment", "Comment") ||
+        getVal(application, "CandidateFeedbackComment", "candidate_feedback_comment", "Comment", "comment") ||
+        getVal(application?.CandidateFeedback, "comment", "Comment") ||
+        getVal(application?.candidate_feedback, "comment", "Comment") ||
+        ""
+    );
+    const feedbackDate = $derived(
+        getVal(candidateFeedback, "created_at", "CreatedAt", "createdAt") ||
+        getVal(application, "CandidateFeedbackCreatedAt", "candidate_feedback_created_at") ||
+        getVal(application?.CandidateFeedback, "created_at", "CreatedAt", "createdAt") ||
+        getVal(application?.candidate_feedback, "created_at", "CreatedAt", "createdAt") ||
+        ""
+    );
+    const hasFeedback = $derived(!!(feedbackRating || feedbackComment));
 
     // Composite score: 80% Quiz + 20% ATS (admin only)
     const compositeScore = $derived.by(() => {
@@ -279,28 +359,26 @@
                 </div>
             </div>
 
-        {:else if !application || accessDenied}
+        {:else if !application}
             <div class="flex min-h-[60vh] items-center justify-center">
                 <div class="text-center max-w-md">
                     <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
                         <BrainCircuit size={32} class="text-gray-400" />
                     </div>
                     <h3 class="text-xl font-semibold text-gray-900">
-                        {accessDenied ? "Quiz Not Completed" : "Application Not Found"}
+                        Application Not Found
                     </h3>
                     <p class="mt-2 text-sm text-gray-500">
-                        {accessDenied
-                            ? "This application hasn't completed the quiz yet. Only quiz-completed applications are visible."
-                            : "The application you're looking for doesn't exist or has been removed."}
+                        The application you're looking for doesn't exist or has been removed.
                     </p>
-                    <button onclick={goBack} class="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    <a href="/admin/applications" class="mt-6 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
                         <ChevronLeft size={16} />
                         Back to Applications
-                    </button>
+                    </a>
                 </div>
             </div>
 
-        {:else if isFinishedQuiz()}
+        {:else}
 
         <!-- Top Navigation Bar -->
         <div class="mb-6 flex items-center justify-between">
@@ -508,6 +586,38 @@
                     </div>
                 </div>
 
+                {#if hasFeedback}
+                    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <MessageSquare size={14} class="text-indigo-600" />
+                                <p class="text-xs font-medium uppercase tracking-wider text-gray-500">Candidate Feedback</p>
+                            </div>
+                            {#if feedbackRating}
+                                <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold
+                                    {feedbackRating === 'positive' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'}">
+                                    {#if feedbackRating === 'positive'}
+                                        <ThumbsUp size={11} /> Helpful
+                                    {:else}
+                                        <ThumbsDown size={11} /> Not helpful
+                                    {/if}
+                                </span>
+                            {/if}
+                        </div>
+                        {#if feedbackComment}
+                            <div class="mt-3">
+                                <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Candidate Comment:</span>
+                                <p class="mt-1 text-xs italic text-gray-800 bg-slate-50 rounded-xl p-3 border border-slate-100 leading-relaxed">
+                                    "{feedbackComment}"
+                                </p>
+                            </div>
+                        {/if}
+                        {#if feedbackDate}
+                            <p class="mt-2 text-[10px] text-gray-400">Submitted {formatDate(feedbackDate)}</p>
+                        {/if}
+                    </div>
+                {/if}
+
                 {#if atsScore != null}
                     <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50 transition-all duration-200 hover:shadow-md hover:ring-gray-200">
                         <p class="text-xs font-medium uppercase tracking-wider text-gray-400">ATS Score</p>
@@ -636,6 +746,65 @@
                             </div>
                             <div class="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">
                                 {coverLetter}
+                            </div>
+                        </div>
+                    {/if}
+
+                    {#if applicantNotes}
+                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                            <div class="flex items-center gap-2">
+                                <FileText size={16} class="text-gray-400" />
+                                <h3 class="text-sm font-semibold text-gray-700">Applicant Notes</h3>
+                            </div>
+                            <div class="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">
+                                {applicantNotes}
+                            </div>
+                        </div>
+                    {/if}
+
+                    {#if employerFeedback}
+                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                            <div class="flex items-center gap-2">
+                                <MessageSquare size={16} class="text-indigo-500" />
+                                <h3 class="text-sm font-semibold text-gray-700">Employer Feedback</h3>
+                            </div>
+                            <div class="mt-3 rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">
+                                {employerFeedback}
+                            </div>
+                        </div>
+                    {/if}
+
+                    {#if hasFeedback}
+                        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/50">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <MessageSquare size={16} class="text-indigo-600" />
+                                    <h3 class="text-sm font-semibold text-gray-700">Candidate Quiz Experience & Feedback</h3>
+                                </div>
+                                {#if feedbackRating}
+                                    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold
+                                        {feedbackRating === 'positive' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'}">
+                                        {#if feedbackRating === 'positive'}
+                                            <ThumbsUp size={11} /> Helpful Experience
+                                        {:else}
+                                            <ThumbsDown size={11} /> Not Helpful
+                                        {/if}
+                                    </span>
+                                {/if}
+                            </div>
+                            {#if feedbackComment}
+                                <div class="mt-3">
+                                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Candidate Comment</p>
+                                    <div class="rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-gray-800 italic border border-slate-200/80 shadow-2xs">
+                                        “{feedbackComment}”
+                                    </div>
+                                </div>
+                            {/if}
+                            <div class="mt-2.5 flex items-center justify-between text-[10px] text-gray-400">
+                                <span>Submitted upon assessment completion</span>
+                                {#if feedbackDate}
+                                    <span>{new Date(feedbackDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                                {/if}
                             </div>
                         </div>
                     {/if}
@@ -891,6 +1060,15 @@
 
                 <!-- Tab: Quiz -->
                 {#if activeTab === 'quiz'}
+                    {#if !isFinishedQuiz()}
+                        <div class="rounded-2xl bg-white p-12 text-center shadow-sm ring-1 ring-gray-200/50">
+                            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                                <Clock size={28} />
+                            </div>
+                            <h3 class="text-sm font-semibold text-gray-700">Quiz Assessment Pending</h3>
+                            <p class="mt-1 text-xs text-gray-400 max-w-xs mx-auto">This candidate has not completed the assessment yet (Status: {(application?.Status || application?.status || 'Pending').replace(/_/g, ' ')}).</p>
+                        </div>
+                    {:else}
                     <div class="space-y-4">
                         <!-- Score Card with Circular Progress -->
                         <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200/50">
@@ -963,7 +1141,79 @@
                                 </p>
                             </div>
                         {/if}
+
+                        <!-- Candidate Quiz Feedback Card -->
+                        <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200/50">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                                        <MessageSquare size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 class="text-base font-bold text-gray-900">Candidate Experience Feedback</h3>
+                                        <p class="text-xs text-gray-400">Feedback submitted by the applicant upon completing this quiz</p>
+                                    </div>
+                                </div>
+                                {#if feedbackRating}
+                                    <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold
+                                        {feedbackRating === 'positive' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                                        {#if feedbackRating === 'positive'}
+                                            <ThumbsUp size={13} />
+                                            <span>Helpful Experience</span>
+                                        {:else}
+                                            <ThumbsDown size={13} />
+                                            <span>Not Helpful</span>
+                                        {/if}
+                                    </span>
+                                {/if}
+                            </div>
+
+                            {#if loadingFeedback}
+                                <div class="flex items-center justify-center py-8 text-xs text-gray-400">
+                                    <Loader2 size={16} class="animate-spin mr-2 text-indigo-600" />
+                                    Loading candidate feedback...
+                                </div>
+                            {:else if hasFeedback}
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-5">
+                                    {#if feedbackComment}
+                                        <div class="mb-4">
+                                            <span class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                                <MessageSquare size={14} class="text-indigo-600" />
+                                                Candidate Written Comment:
+                                            </span>
+                                            <div class="flex items-start gap-2.5 rounded-xl bg-white p-4 border border-gray-200 shadow-2xs">
+                                                <span class="text-2xl text-indigo-400 font-serif leading-none select-none">“</span>
+                                                <p class="text-sm font-normal text-gray-800 leading-relaxed italic flex-1">
+                                                    {feedbackComment}
+                                                </p>
+                                                <span class="text-2xl text-indigo-400 font-serif leading-none select-none self-end">”</span>
+                                            </div>
+                                        </div>
+                                    {:else}
+                                        <p class="text-xs text-gray-400 italic mb-2">No written comment provided with the rating.</p>
+                                    {/if}
+                                    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/60 pt-3 text-[11px] text-gray-500">
+                                        <span class="flex items-center gap-1">
+                                            Experience Rating: 
+                                            <strong class="capitalize {feedbackRating === 'positive' ? 'text-emerald-600' : 'text-rose-600'}">
+                                                {feedbackRating || 'N/A'}
+                                            </strong>
+                                        </span>
+                                        {#if feedbackDate}
+                                            <span>📅 Submitted on {new Date(feedbackDate).toLocaleString()}</span>
+                                        {/if}
+                                    </div>
+                                </div>
+                            {:else}
+                                <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50/40 py-8 px-4 text-center">
+                                    <MessageSquare size={24} class="mx-auto text-gray-300 mb-2" />
+                                    <p class="text-xs font-medium text-gray-500">No candidate feedback recorded yet</p>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">The candidate hasn't submitted a review for this quiz attempt.</p>
+                                </div>
+                            {/if}
+                        </div>
                     </div>
+                    {/if}
                 {/if}
             </div>
         </div>

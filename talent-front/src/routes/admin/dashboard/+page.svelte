@@ -27,7 +27,16 @@
     let initialActivityLength = $state(0);
     let initialPagination = $state(null);
 
+    // Chart controls and analytics
+    let appChartMode = $state("daily"); // "daily" or "cumulative"
+    let userChartMode = $state("growth"); // "growth" or "new"
+    let hoveredAppIndex = $state(null);
+    let hoveredUserIndex = $state(null);
+
     const stats = $derived(() => dashboard?.stats || null);
+    const appTrend = $derived(() => dashboard?.applications_trend || []);
+    const userTrend = $derived(() => dashboard?.users_trend || []);
+    const statusDist = $derived(() => dashboard?.status_distribution || []);
 
     const statCards = $derived(() => {
         const s = stats();
@@ -196,67 +205,295 @@
     <!-- ============================================================ -->
     <!-- ANALYTICS GRAPHS                                               -->
     <!-- ============================================================ -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <!-- Applications Trend -->
-        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <div class="flex items-center gap-2">
-                    <Activity size={14} class="text-gray-400" />
-                    <h3 class="text-sm font-semibold text-gray-900">Applications Trend</h3>
+        <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                        <Activity size={15} />
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">Applications Trend</h3>
+                        <p class="text-[11px] text-gray-400">Activity across the last 30 days</p>
+                    </div>
                 </div>
-                <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming Soon</span>
+                <div class="flex items-center gap-1 rounded-lg bg-gray-100 p-0.5 text-xs font-medium text-gray-500">
+                    <button
+                        type="button"
+                        onclick={() => appChartMode = 'daily'}
+                        class="rounded-md px-2.5 py-1 transition-all {appChartMode === 'daily' ? 'bg-white text-gray-900 shadow-xs font-semibold' : 'hover:text-gray-900'}"
+                    >
+                        Daily
+                    </button>
+                    <button
+                        type="button"
+                        onclick={() => appChartMode = 'cumulative'}
+                        class="rounded-md px-2.5 py-1 transition-all {appChartMode === 'cumulative' ? 'bg-white text-gray-900 shadow-xs font-semibold' : 'hover:text-gray-900'}"
+                    >
+                        Cumulative
+                    </button>
+                </div>
             </div>
-            <div class="p-4 min-h-[180px] flex flex-col items-center justify-center">
-                <svg class="w-full h-32" viewBox="0 0 400 120" fill="none">
-                    <path d="M0 100 Q50 80 100 85 T200 60 T300 40 T400 50" stroke="#e5e7eb" stroke-width="2" fill="none" stroke-dasharray="4 4" />
-                    <path d="M0 90 Q50 70 100 75 T200 50 T300 30 T400 40" stroke="#c4b5fd" stroke-width="2" fill="none" opacity="0.5" />
-                </svg>
-                <p class="text-xs text-gray-400 mt-3 text-center">Analytics data will appear here when historical data is available.</p>
+
+            <div class="p-5">
+                {#if appTrend().length > 0}
+                    {@const trend = appTrend()}
+                    {@const maxCount = Math.max(...trend.map(t => appChartMode === 'daily' ? t.count : t.total), 4)}
+                    {@const points = trend.map((p, i) => ({
+                        x: 35 + (i / (trend.length - 1 || 1)) * 435,
+                        y: 125 - ((appChartMode === 'daily' ? p.count : p.total) / maxCount) * 105,
+                        data: p,
+                        val: appChartMode === 'daily' ? p.count : p.total
+                    }))}
+                    {@const lineD = points.reduce((acc, p, i) => i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`, '')}
+                    {@const areaD = `${lineD} L ${points[points.length - 1].x} 125 L ${points[0].x} 125 Z`}
+
+                    <div class="relative">
+                        <svg class="w-full h-44 overflow-visible" viewBox="0 0 490 145">
+                            <defs>
+                                <linearGradient id="appGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#6366f1" stop-opacity="0.35" />
+                                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0" />
+                                </linearGradient>
+                            </defs>
+
+                            <!-- Horizontal Grid Lines -->
+                            <line x1="35" y1="20" x2="470" y2="20" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
+                            <text x="25" y="24" fill="#94a3b8" font-size="9" text-anchor="end">{maxCount}</text>
+
+                            <line x1="35" y1="72" x2="470" y2="72" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
+                            <text x="25" y="76" fill="#94a3b8" font-size="9" text-anchor="end">{Math.round(maxCount / 2)}</text>
+
+                            <line x1="35" y1="125" x2="470" y2="125" stroke="#e2e8f0" stroke-width="1" />
+                            <text x="25" y="128" fill="#94a3b8" font-size="9" text-anchor="end">0</text>
+
+                            <!-- Area fill -->
+                            <path d={areaD} fill="url(#appGradient)" />
+
+                            <!-- Line stroke -->
+                            <path d={lineD} fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+                            <!-- Interactive Points -->
+                            {#each points as pt, idx}
+                                {#if pt.val > 0 || idx === hoveredAppIndex}
+                                    <circle
+                                        cx={pt.x}
+                                        cy={pt.y}
+                                        r={idx === hoveredAppIndex ? 6 : 4}
+                                        fill="#ffffff"
+                                        stroke="#6366f1"
+                                        stroke-width="2.5"
+                                        class="cursor-pointer transition-all"
+                                        onmouseenter={() => hoveredAppIndex = idx}
+                                        onmouseleave={() => hoveredAppIndex = null}
+                                    />
+                                {/if}
+                            {/each}
+
+                            <!-- X Axis Labels -->
+                            {#each points as pt, idx}
+                                {#if idx === 0 || idx === points.length - 1 || idx % 7 === 0}
+                                    <text x={pt.x} y="140" fill="#94a3b8" font-size="9" text-anchor="middle">{pt.data.label}</text>
+                                {/if}
+                            {/each}
+                        </svg>
+
+                        <!-- Hover Tooltip -->
+                        {#if hoveredAppIndex !== null && points[hoveredAppIndex]}
+                            {@const activePt = points[hoveredAppIndex]}
+                            <div
+                                class="absolute pointer-events-none rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs text-white shadow-lg transition-all"
+                                style="left: {Math.min(Math.max((activePt.x / 490) * 100, 12), 88)}%; top: {Math.max((activePt.y / 145) * 100 - 30, 5)}%; transform: translate(-50%, -100%);"
+                            >
+                                <p class="font-semibold">{activePt.data.label}</p>
+                                <p class="text-[11px] text-gray-300">
+                                    {appChartMode === 'daily' ? `${activePt.data.count} applications` : `${activePt.data.total} total applications`}
+                                </p>
+                            </div>
+                        {/if}
+                    </div>
+
+                    <div class="mt-3 flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                        <span>Total in period: <strong class="text-gray-900">{trend[trend.length - 1]?.total || 0}</strong> applications</span>
+                        <span class="text-indigo-600 font-medium">{trend.filter(t => t.count > 0).length} active submission days</span>
+                    </div>
+                {:else}
+                    <div class="py-12 text-center text-xs text-gray-400">No application data available yet.</div>
+                {/if}
             </div>
         </div>
 
         <!-- Users Trend -->
-        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <div class="flex items-center gap-2">
-                    <TrendingUp size={14} class="text-gray-400" />
-                    <h3 class="text-sm font-semibold text-gray-900">Users Trend</h3>
+        <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                        <TrendingUp size={15} />
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">Users Growth</h3>
+                        <p class="text-[11px] text-gray-400">Candidate registration trajectory</p>
+                    </div>
                 </div>
-                <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming Soon</span>
+                <div class="flex items-center gap-1 rounded-lg bg-gray-100 p-0.5 text-xs font-medium text-gray-500">
+                    <button
+                        type="button"
+                        onclick={() => userChartMode = 'growth'}
+                        class="rounded-md px-2.5 py-1 transition-all {userChartMode === 'growth' ? 'bg-white text-gray-900 shadow-xs font-semibold' : 'hover:text-gray-900'}"
+                    >
+                        Total Users
+                    </button>
+                    <button
+                        type="button"
+                        onclick={() => userChartMode = 'new'}
+                        class="rounded-md px-2.5 py-1 transition-all {userChartMode === 'new' ? 'bg-white text-gray-900 shadow-xs font-semibold' : 'hover:text-gray-900'}"
+                    >
+                        New Monthly
+                    </button>
+                </div>
             </div>
-            <div class="p-4 min-h-[180px] flex flex-col items-center justify-center">
-                <svg class="w-full h-32" viewBox="0 0 400 120" fill="none">
-                    <path d="M0 110 Q60 90 120 95 T240 70 T360 55 T400 60" stroke="#e5e7eb" stroke-width="2" fill="none" stroke-dasharray="4 4" />
-                    <path d="M0 100 Q60 80 120 85 T240 60 T360 45 T400 50" stroke="#a5b4fc" stroke-width="2" fill="none" opacity="0.5" />
-                </svg>
-                <p class="text-xs text-gray-400 mt-3 text-center">Analytics data will appear here when historical data is available.</p>
+
+            <div class="p-5">
+                {#if userTrend().length > 0}
+                    {@const trend = userTrend()}
+                    {@const maxCount = Math.max(...trend.map(t => userChartMode === 'growth' ? t.total : t.count), 4)}
+                    {@const points = trend.map((p, i) => ({
+                        x: 35 + (i / (trend.length - 1 || 1)) * 435,
+                        y: 125 - ((userChartMode === 'growth' ? p.total : p.count) / maxCount) * 105,
+                        data: p,
+                        val: userChartMode === 'growth' ? p.total : p.count
+                    }))}
+                    {@const lineD = points.reduce((acc, p, i) => i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`, '')}
+                    {@const areaD = `${lineD} L ${points[points.length - 1].x} 125 L ${points[0].x} 125 Z`}
+
+                    <div class="relative">
+                        <svg class="w-full h-44 overflow-visible" viewBox="0 0 490 145">
+                            <defs>
+                                <linearGradient id="userGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
+                                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+                                </linearGradient>
+                            </defs>
+
+                            <!-- Horizontal Grid Lines -->
+                            <line x1="35" y1="20" x2="470" y2="20" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
+                            <text x="25" y="24" fill="#94a3b8" font-size="9" text-anchor="end">{maxCount}</text>
+
+                            <line x1="35" y1="72" x2="470" y2="72" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="3 3" />
+                            <text x="25" y="76" fill="#94a3b8" font-size="9" text-anchor="end">{Math.round(maxCount / 2)}</text>
+
+                            <line x1="35" y1="125" x2="470" y2="125" stroke="#e2e8f0" stroke-width="1" />
+                            <text x="25" y="128" fill="#94a3b8" font-size="9" text-anchor="end">0</text>
+
+                            <!-- Area fill -->
+                            <path d={areaD} fill="url(#userGradient)" />
+
+                            <!-- Line stroke -->
+                            <path d={lineD} fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+                            <!-- Interactive Points -->
+                            {#each points as pt, idx}
+                                <circle
+                                    cx={pt.x}
+                                    cy={pt.y}
+                                    r={idx === hoveredUserIndex ? 6 : 4}
+                                    fill="#ffffff"
+                                    stroke="#10b981"
+                                    stroke-width="2.5"
+                                    class="cursor-pointer transition-all"
+                                    onmouseenter={() => hoveredUserIndex = idx}
+                                    onmouseleave={() => hoveredUserIndex = null}
+                                />
+                            {/each}
+
+                            <!-- X Axis Labels -->
+                            {#each points as pt}
+                                <text x={pt.x} y="140" fill="#94a3b8" font-size="9" text-anchor="middle">{pt.data.label.slice(0, 3)}</text>
+                            {/each}
+                        </svg>
+
+                        <!-- Hover Tooltip -->
+                        {#if hoveredUserIndex !== null && points[hoveredUserIndex]}
+                            {@const activePt = points[hoveredUserIndex]}
+                            <div
+                                class="absolute pointer-events-none rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs text-white shadow-lg transition-all"
+                                style="left: {Math.min(Math.max((activePt.x / 490) * 100, 12), 88)}%; top: {Math.max((activePt.y / 145) * 100 - 30, 5)}%; transform: translate(-50%, -100%);"
+                            >
+                                <p class="font-semibold">{activePt.data.label}</p>
+                                <p class="text-[11px] text-gray-300">
+                                    {userChartMode === 'growth' ? `${activePt.data.total} total registered users` : `${activePt.data.count} new registrations`}
+                                </p>
+                            </div>
+                        {/if}
+                    </div>
+
+                    <div class="mt-3 flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                        <span>Total registered: <strong class="text-gray-900">{trend[trend.length - 1]?.total || 0}</strong> users</span>
+                        <span class="text-emerald-600 font-medium">Historical trajectory</span>
+                    </div>
+                {:else}
+                    <div class="py-12 text-center text-xs text-gray-400">No user growth data available yet.</div>
+                {/if}
             </div>
         </div>
 
         <!-- Application Status Distribution -->
-        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden lg:col-span-2">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <div class="flex items-center gap-2">
-                    <BarChart3 size={14} class="text-gray-400" />
-                    <h3 class="text-sm font-semibold text-gray-900">Application Status Distribution</h3>
+        <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs lg:col-span-2">
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                <div class="flex items-center gap-2.5">
+                    <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+                        <BarChart3 size={15} />
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">Application Status Distribution</h3>
+                        <p class="text-[11px] text-gray-400">Breakdown of all {stats()?.total_applications || 0} candidate applications</p>
+                    </div>
                 </div>
-                <span class="text-[10px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming Soon</span>
+                <span class="text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                    {stats()?.total_applications || 0} Total
+                </span>
             </div>
-            <div class="p-4 min-h-[140px] flex flex-col items-center justify-center">
-                <div class="flex items-end gap-3 w-full max-w-md justify-center">
-                    {#each ["Submitted", "Review", "Shortlisted", "Rejected", "Accepted"] as label, i}
-                        {@const heights = [60, 40, 25, 35, 20]}
-                        {@const colors = ["#3b82f6", "#f59e0b", "#06b6d4", "#ef4444", "#10b981"]}
-                        <div class="flex flex-col items-center gap-1.5 flex-1">
-                            <div
-                                class="w-full rounded-t-md"
-                                style="height: {heights[i]}px; background-color: {colors[i]}; opacity: 0.2;"
-                            ></div>
-                            <span class="text-[9px] text-gray-400 font-medium text-center">{label}</span>
+
+            <div class="p-6">
+                {#if statusDist().length > 0}
+                    {@const dist = statusDist()}
+                    {@const maxCount = Math.max(...dist.map(d => d.count), 1)}
+
+                    <!-- Multi-segment Progress Bar -->
+                    <div class="mb-6">
+                        <div class="h-3.5 w-full rounded-full bg-gray-100 flex overflow-hidden p-0.5">
+                            {#each dist as item}
+                                <div
+                                    class="h-full rounded-full transition-all duration-500 first:rounded-l-full last:rounded-r-full"
+                                    style="width: {item.percentage}%; background-color: {item.color};"
+                                    title="{item.label}: {item.count} ({item.percentage}%)"
+                                ></div>
+                            {/each}
                         </div>
-                    {/each}
-                </div>
-                <p class="text-xs text-gray-400 mt-3 text-center">Analytics data will appear here when historical data is available.</p>
+                    </div>
+
+                    <!-- Column Bars Representation -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {#each dist as item}
+                            <div class="flex flex-col items-center rounded-xl border border-gray-100 bg-gray-50/50 p-4 transition-all hover:bg-gray-50 hover:shadow-2xs">
+                                <div class="w-full flex items-end justify-center h-28 mb-3">
+                                    <div
+                                        class="w-12 rounded-t-lg transition-all duration-700 hover:brightness-105"
+                                        style="height: {Math.max((item.count / maxCount) * 100, 12)}px; background-color: {item.color};"
+                                    ></div>
+                                </div>
+                                <span class="text-lg font-bold text-gray-900">{item.count}</span>
+                                <span class="text-xs font-medium text-gray-600 text-center mt-0.5">{item.label}</span>
+                                <span class="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold" style="background-color: {item.color}15; color: {item.color};">
+                                    {item.percentage}%
+                                </span>
+                            </div>
+                        {/each}
+                    </div>
+                {:else}
+                    <div class="py-8 text-center text-xs text-gray-400">No application status data available yet.</div>
+                {/if}
             </div>
         </div>
     </div>

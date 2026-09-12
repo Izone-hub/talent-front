@@ -1,5 +1,6 @@
 <script>
     import { goto } from '$app/navigation';
+    import { onMount } from 'svelte';
     import { applicationService } from '$lib/api/application.service';
     import EmptyState from '$lib/components/ui/EmptyState.svelte';
     import AdminPageHeader from '$lib/components/ui/AdminPageHeader.svelte';
@@ -40,13 +41,13 @@
     let quizCandidates = $state([]);
     let summary = $state({ total_applicants: 0, quiz_done: 0, shortlisted: 0, accepted: 0 });
     let jobApps = $state({});
+    let candidateFeedbacks = $state({});
     let loading = $state(true);
     let loadingApps = $state(false);
     let expandedCard = $state(null);
     let appPages = $state({});
     let showAllJobs = $state(false);
-    // At least 10 applicants are shown at once so a phone-sized viewport can
-    // still see a full page of applicants without scrolling pagination.
+
     const APPS_PER_PAGE = 10;
     const INITIAL_JOBS = 4;
     const QUIZ_CARD_PAGE_SIZE = 10;
@@ -59,21 +60,39 @@
         internship: 'Internship',
     };
 
-    let loadStarted = false;
-    $effect(() => {
-        if (loadStarted) return;
-        loadStarted = true;
+    function fetchFeedbackForApps(appList) {
+        if (!appList || !Array.isArray(appList)) return;
+        appList.forEach(app => {
+            const appId = app.application_id || app.ID || app.id;
+            if (!appId) return;
+
+            // If feedback fields are already present from backend join, cache directly without network requests
+            const hasFbFields = ('candidate_feedback_rating' in app) || ('CandidateFeedbackRating' in app);
+            if (hasFbFields) {
+                const rating = getVal(app, 'candidate_feedback_rating', 'CandidateFeedbackRating', 'feedback_rating', 'FeedbackRating');
+                const comment = getVal(app, 'candidate_feedback_comment', 'CandidateFeedbackComment', 'feedback_comment', 'FeedbackComment');
+                candidateFeedbacks[appId] = (rating || comment) ? { rating, comment } : null;
+                return;
+            }
+
+            if (candidateFeedbacks[appId] === undefined) {
+                candidateFeedbacks[appId] = null;
+                applicationService.getCandidateFeedback(appId).then(fb => {
+                    if (fb && (fb.rating || fb.comment || fb.Rating || fb.Comment)) {
+                        candidateFeedbacks[appId] = fb;
+                    }
+                }).catch(() => {});
+            }
+        });
+    }
+
+    onMount(() => {
         loadOverview();
     });
 
-    // Jobs arrive pre-sorted by applicant count from the backend; keep them in
-    // that order for the "most applicants first" listing.
-    let sortedJobs = $derived(() => [...jobs]);
-
-    let visibleJobs = $derived(() => {
-        const all = sortedJobs();
-        return showAllJobs ? all : all.slice(0, INITIAL_JOBS);
-    });
+    // Jobs arrive pre-sorted by applicant count from the backend
+    let sortedJobs = $derived([...jobs]);
+    let visibleJobs = $derived(showAllJobs ? sortedJobs : sortedJobs.slice(0, INITIAL_JOBS));
 
     // ---- Overview stat cards (values come straight from the server) ----
     function getStatCards() {
@@ -89,9 +108,10 @@
         loading = true;
         try {
             const overview = await applicationService.getAdminApplicationsOverview();
-            jobs = overview.jobs;
-            quizCandidates = overview.quizCandidates;
-            summary = overview.summary;
+            jobs = overview.jobs || [];
+            quizCandidates = overview.quizCandidates || [];
+            summary = overview.summary || { total_applicants: 0, quiz_done: 0, shortlisted: 0, accepted: 0 };
+            fetchFeedbackForApps(quizCandidates.slice(0, QUIZ_CARD_PAGE_SIZE));
         } catch (error) {
             console.error('Failed to load applications overview:', error);
             jobs = [];
@@ -106,7 +126,9 @@
         loadingApps = true;
         try {
             const data = await applicationService.getJobApplications(jobId);
-            jobApps = { ...jobApps, [jobId]: Array.isArray(data) ? data : [] };
+            const list = Array.isArray(data) ? data : [];
+            jobApps[jobId] = list;
+            fetchFeedbackForApps(list);
         } catch (error) {
             console.error('Failed to load applications:', error);
         } finally {
@@ -131,12 +153,14 @@
         const maxPage = Math.ceil(apps.length / APPS_PER_PAGE) - 1;
         if ((appPages[jobId] || 0) < maxPage) {
             appPages = { ...appPages, [jobId]: (appPages[jobId] || 0) + 1 };
+            fetchFeedbackForApps(getPageApps(jobId));
         }
     }
 
     function prevPage(jobId) {
         if ((appPages[jobId] || 0) > 0) {
             appPages = { ...appPages, [jobId]: (appPages[jobId] || 0) - 1 };
+            fetchFeedbackForApps(getPageApps(jobId));
         }
     }
 
@@ -313,11 +337,19 @@
                         {:else}
                             <div class="grid gap-2 lg:grid-cols-2">
                                 {#each quizCandidates.slice(0, QUIZ_CARD_PAGE_SIZE) as app, i}
+                                    {@const appId = app.application_id || app.ID}
                                     {@const name = app.applicant_name || app.ApplicantName || app.applicant_github_username || 'Applicant'}
                                     {@const score = app.quiz_score ?? 0}
-                                    <div
+                                    {@const fb = candidateFeedbacks[appId] || {
+                                        rating: getVal(app, 'candidate_feedback_rating', 'CandidateFeedbackRating'),
+                                        comment: getVal(app, 'candidate_feedback_comment', 'CandidateFeedbackComment')
+                                    }}
+                                    {@const fbComment = getVal(fb, 'comment', 'Comment')}
+                                    {@const fbRating = getVal(fb, 'rating', 'Rating')}
+                                    <a
+                                        href="/admin/applications/{appId}"
                                         class="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100 hover:border-amber-300 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-                                        onclick={(e) => { e.stopPropagation(); goto(`/admin/applications/${app.application_id || app.ID}`); }}
+                                        onclick={(e) => e.stopPropagation()}
                                     >
                                         {#if i === 0}
                                             <span class="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-sm">
@@ -335,16 +367,29 @@
                                             {getInitials(name)}
                                         </div>
                                         <div class="flex-1 min-w-0">
-                                            <p class="text-sm font-semibold text-gray-900 truncate">
-                                                {name}
-                                            </p>
+                                            <div class="flex items-center gap-2">
+                                                <p class="text-sm font-semibold text-gray-900 truncate">
+                                                    {name}
+                                                </p>
+                                                {#if fbRating}
+                                                    <span class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-semibold shrink-0 {fbRating === 'positive' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}" title="Candidate experience rating: {fbRating}">
+                                                        {fbRating === 'positive' ? '👍' : '👎'}
+                                                    </span>
+                                                {/if}
+                                            </div>
                                             <p class="text-xs text-gray-400 truncate">{app.job_title || app.JobTitle || 'Unknown'}</p>
+                                            {#if fbComment}
+                                                <div class="mt-1 flex items-center gap-1 text-[11px] text-indigo-700 bg-indigo-50/70 border border-indigo-100/80 rounded px-2 py-0.5 max-w-fit truncate" title={fbComment}>
+                                                    <MessageSquare size={10} class="shrink-0 text-indigo-500" />
+                                                    <span class="italic truncate max-w-xs sm:max-w-sm">“{fbComment}”</span>
+                                                </div>
+                                            {/if}
                                         </div>
                                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold {getScoreColor(score)} shrink-0">
                                             <Star size={10} />
                                             {score}%
                                         </span>
-                                    </div>
+                                    </a>
                                 {/each}
                             </div>
                             {#if quizCandidates.length > QUIZ_CARD_PAGE_SIZE}
@@ -360,7 +405,7 @@
             <!-- ============================================================ -->
             <!-- Job Cards with their applicant lists                          -->
             <!-- ============================================================ -->
-            {#each visibleJobs() as job (job.id || job.ID)}
+            {#each visibleJobs as job (job.id || job.ID)}
                 {@const id = job.id || job.ID}
                 {@const count = jobCount(job)}
                 {@const catCfg = getCategoryConfig(job.category || job.Category || 'other')}
@@ -482,14 +527,22 @@
 
                                 <div class="space-y-2">
                                     {#each pageApps as app}
+                                        {@const appId = app.ID || app.id}
                                         {@const cfg = getStatusConfig(app.Status || app.status || 'unknown')}
                                         {@const score = getVal(app, 'QuizScore', 'quiz_score')}
                                         {@const name = getApplicantName(app)}
                                         {@const gh = getVal(app, 'github_username', 'GithubUsername')}
                                         {@const appDate = app.SubmittedAt || app.submitted_at}
-                                        <div
+                                        {@const fb = candidateFeedbacks[appId] || {
+                                            rating: getVal(app, 'CandidateFeedbackRating', 'candidate_feedback_rating'),
+                                            comment: getVal(app, 'CandidateFeedbackComment', 'candidate_feedback_comment')
+                                        }}
+                                        {@const fbComment = getVal(fb, 'comment', 'Comment')}
+                                        {@const fbRating = getVal(fb, 'rating', 'Rating')}
+                                        <a
+                                            href="/admin/applications/{appId}"
                                             class="group/app flex items-center gap-2.5 sm:gap-3 px-3 py-2.5 rounded-xl bg-white border border-gray-100 hover:border-purple-200 hover:bg-purple-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer"
-                                            onclick={(e) => { e.stopPropagation(); goto(`/admin/applications/${app.ID || app.id}`); }}
+                                            onclick={(e) => e.stopPropagation()}
                                         >
                                             <div
                                                 class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0 ring-2 ring-purple-50"
@@ -498,7 +551,14 @@
                                                 {getInitials(name)}
                                             </div>
                                             <div class="flex-1 min-w-0">
-                                                <p class="text-sm font-semibold text-gray-900 truncate">{name}</p>
+                                                <div class="flex items-center gap-2">
+                                                    <p class="text-sm font-semibold text-gray-900 truncate">{name}</p>
+                                                    {#if fbRating}
+                                                        <span class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-semibold shrink-0 {fbRating === 'positive' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}" title="Candidate experience rating: {fbRating}">
+                                                            {fbRating === 'positive' ? '👍' : '👎'}
+                                                        </span>
+                                                    {/if}
+                                                </div>
                                                 <div class="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-gray-400">
                                                     {#if appDate}
                                                         <span class="inline-flex items-center gap-1">
@@ -513,6 +573,12 @@
                                                         </span>
                                                     {/if}
                                                 </div>
+                                                {#if fbComment}
+                                                    <div class="mt-1 flex items-center gap-1 text-[11px] text-indigo-700 bg-indigo-50/70 border border-indigo-100/80 rounded px-2 py-0.5 max-w-fit truncate" title={fbComment}>
+                                                        <MessageSquare size={10} class="shrink-0 text-indigo-500" />
+                                                        <span class="italic truncate max-w-xs sm:max-w-sm">“{fbComment}”</span>
+                                                    </div>
+                                                {/if}
                                             </div>
                                             <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
                                                 {#if score != null}
@@ -527,7 +593,7 @@
                                                 </span>
                                                 <ArrowRight size={14} class="hidden sm:block text-gray-200 group-hover/app:text-purple-500 group-hover/app:translate-x-0.5 transition-all" />
                                             </div>
-                                        </div>
+                                        </a>
                                     {/each}
                                 </div>
 
@@ -543,7 +609,7 @@
                                             Prev
                                         </button>
                                         <div class="flex items-center gap-1.5">
-                                            {#each Array(totalPages) as _, i}
+                                            {#each Array.from({ length: totalPages }) as _, i}
                                                 <button
                                                     class="w-7 h-7 rounded-lg text-xs font-bold transition-all
                                                     {i === (appPages[id] || 0)
