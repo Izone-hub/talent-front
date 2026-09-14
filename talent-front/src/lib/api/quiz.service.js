@@ -16,6 +16,14 @@ export const quizService = {
         return apiClient.get(`/quizzes/${quizId}/question`);
     },
 
+	getQuestionFeedback: async (questionId) => {
+		return apiClient.get(`/questions/${questionId}/feedback`);
+	},
+
+	saveQuestionFeedback: async (questionId, feedback) => {
+		return apiClient.post(`/questions/${questionId}/feedback`, { feedback });
+	},
+
     saveAnswer: async (quizId, questionId, userAnswer, timeSpentSeconds, isSkipped) => {
         return apiClient.post(`/quizzes/${quizId}/answer`, {
             question_id: questionId,
@@ -50,25 +58,57 @@ export const quizService = {
 	saveQuizResult: (quizId, data) => {
 		if (typeof window === 'undefined') return;
 		try {
-			localStorage.setItem(`quiz_result_${quizId}`, JSON.stringify(data));
+			// Do not store answer keys or detailed answers in client storage
+			const { answers, ...summary } = data || {};
+			localStorage.setItem(`quiz_result_${quizId}`, JSON.stringify(summary));
 		} catch (e) {
 			console.warn('Failed to save quiz result locally:', e);
 		}
 	},
 
-	getResult: async (quizId, userId) => {
-		if (typeof window !== 'undefined') {
-			try {
-				const cached = localStorage.getItem(`quiz_result_${quizId}`);
-				if (cached) {
-					const parsed = JSON.parse(cached);
-					return parsed;
-				}
-			} catch (e) {
-				// ignore parse errors
-			}
-		}
+	getResult: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/result`);
+	},
 
-		return apiClient.get(`/quizzes/${quizId}/review`);
+	getReviewQuestions: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/review-questions`);
+	},
+
+	getQuestionDetail: async (quizId, questionId) => {
+		return apiClient.get(`/quizzes/${quizId}/questions/${questionId}`);
+	},
+
+	// Quiz result feedback
+	getQuizResultFeedback: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/feedback`);
+	},
+
+	saveQuizResultFeedback: async (quizId, rating, comment = '') => {
+		return apiClient.post(`/quizzes/${quizId}/feedback`, { rating, comment });
+	},
+
+	validateQuizResultFeedback: async (quizId, comment = '') => {
+		return apiClient.post(`/quizzes/${quizId}/feedback/validate`, { comment });
+	},
+
+	deleteQuizResultFeedback: async (quizId) => {
+		return apiClient.delete(`/quizzes/${quizId}/feedback`);
+	},
+
+	// Quiz answer feedback (per-question with application context)
+	getQuizAnswerFeedback: async (quizId) => {
+		return apiClient.get(`/quizzes/${quizId}/answer-feedback`);
+	},
+
+	saveQuizAnswerFeedback: async (quizId, questionId, applicationId, feedback) => {
+		return apiClient.post(`/quizzes/${quizId}/answer-feedback`, {
+			question_id: questionId,
+			application_id: applicationId,
+			feedback,
+		});
+	},
+
+	deleteQuizAnswerFeedback: async (quizId, questionId) => {
+		return apiClient.delete(`/quizzes/${quizId}/answer-feedback/${questionId}`);
 	},
 };

@@ -256,7 +256,7 @@
                             >
                         </div>
                         <p class="text-3xl font-bold text-slate-800">
-                            {githubStats?.public_gists ?? user?.public_gists ?? 0}
+                            {githubStats?.public_gists ?? 0}
                         </p>
                     </div>
                 </div>

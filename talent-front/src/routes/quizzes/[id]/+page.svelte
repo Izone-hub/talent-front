@@ -19,6 +19,8 @@
         Send,
         Timer,
         TimerOff,
+        ThumbsUp,
+        ThumbsDown,
     } from "@lucide/svelte";
     import SkeletonQuiz from "$lib/components/ui/SkeletonQuiz.svelte";
     import CodeEditor from "$lib/components/ui/CodeEditor.svelte";
@@ -40,6 +42,7 @@
     let quiz = $state(null);
     let question = $state(null);
     let questionNumber = $state(0);
+    let totalQuestions = $state(10);
     let selectedOption = $state("");
     let code = $state("");
     let isSaving = $state(false);
@@ -51,9 +54,11 @@
     let timeRemaining = $state(0);
     let timerInterval = null;
     let userAnswers = $state([]);
+    let questionFeedback = $state("");
+    let feedbackSaving = $state(false);
 
     function getQuizQuestionCount() {
-        return quiz?.questions_per_quiz || quiz?.total_questions || 10;
+        return totalQuestions || quiz?.questions_per_quiz || quiz?.total_questions || 10;
     }
 
     function isLastQuestion() {
@@ -521,7 +526,9 @@
 
         phase = "starting";
         try {
-            await quizService.startQuiz(quizId, applicationId, jobId);
+            const appId = applicationId || quiz?.application_id;
+            const jId = jobId || quiz?.job_id;
+            await quizService.startQuiz(quizId, appId, jId);
             showToast("Quiz started!", "success");
             enableAntiCheat("quiz-active");
             await loadNextQuestion();
@@ -542,10 +549,12 @@
                 phase = "finished";
                 return;
             }
-            if (!q || !q.id) {
+            if (!q || (!q.id && !q.question?.id)) {
                 phase = "ready";
                 return;
             }
+
+            const curQ = q.question || q;
 
             if (question) {
                 persistCurrentQuestionState();
@@ -553,29 +562,59 @@
 
             const nextHistory = questionHistory.slice(0, historyIndex + 1);
             nextHistory.push({
-                question: q,
+                question: curQ,
                 selectedOption: "",
                 code: "",
-                timeRemaining: q.time_limit_seconds || 0,
+                timeRemaining: curQ.time_limit_seconds || 0,
             });
 
             questionHistory = nextHistory;
             historyIndex = nextHistory.length - 1;
-            question = q;
-            questionNumber = historyIndex + 1;
+            question = curQ;
+            questionFeedback = "";
+            questionNumber = q.question_number || (historyIndex + 1);
+            if (q.total_questions) {
+                totalQuestions = q.total_questions;
+            }
             selectedOption = "";
             code = "";
-            timeRemaining = q.time_limit_seconds || 0;
-            const details = codingDetails(q);
+            timeRemaining = curQ.time_limit_seconds || 0;
+            const details = codingDetails(curQ);
             if (details?.code_template) {
                 code = details.code_template;
             }
+            await loadQuestionFeedback(curQ.id);
             startTimer();
         } catch (e) {
             showToast("Failed to load question", "error");
             if (questionNumber === 0) {
                 phase = "ready";
             }
+        }
+    }
+
+    async function loadQuestionFeedback(questionId) {
+        try {
+            const response = await quizService.getQuestionFeedback(questionId);
+            questionFeedback = response?.feedback || "";
+        } catch {
+            questionFeedback = "";
+        }
+    }
+
+    async function selectQuestionFeedback(feedback) {
+        if (!question || feedbackSaving) return;
+        const previousFeedback = questionFeedback;
+        questionFeedback = feedback;
+        feedbackSaving = true;
+        try {
+            const response = await quizService.saveQuestionFeedback(question.id, feedback);
+            questionFeedback = response?.feedback || feedback;
+        } catch (error) {
+            questionFeedback = previousFeedback;
+            showToast("Failed to save feedback", "error");
+        } finally {
+            feedbackSaving = false;
         }
     }
 
@@ -774,6 +813,11 @@
     async function loadQuiz() {
         try {
             quiz = await quizService.getQuiz(quizId);
+            if (quiz?.questions_per_quiz) {
+                totalQuestions = quiz.questions_per_quiz;
+            } else if (quiz?.total_questions) {
+                totalQuestions = quiz.total_questions;
+            }
         } catch {
             // quiz may not exist yet
         }
@@ -788,16 +832,22 @@
                     phase = "finished";
                     resultMessage = q.message || "You've completed this quiz!";
                 }
-            } else if (q && q.id) {
-                question = q;
-                questionNumber = 1;
-                timeRemaining = q.time_limit_seconds || 0;
-                questionHistory = [{ question: q, selectedOption: "", code: "", timeRemaining: q.time_limit_seconds || 0 }];
+            } else if (q && (q.id || q.question?.id)) {
+                const curQ = q.question || q;
+                question = curQ;
+                questionFeedback = "";
+                questionNumber = q.question_number || 1;
+                if (q.total_questions) {
+                    totalQuestions = q.total_questions;
+                }
+                timeRemaining = curQ.time_limit_seconds || 0;
+                questionHistory = [{ question: curQ, selectedOption: "", code: "", timeRemaining: curQ.time_limit_seconds || 0 }];
                 historyIndex = 0;
-                const details = codingDetails(q);
+                const details = codingDetails(curQ);
                 if (details?.code_template) {
                     code = details.code_template;
                 }
+                await loadQuestionFeedback(curQ.id);
                 phase = "active";
                 enableAntiCheat("quiz-active");
                 startTimer();
@@ -878,7 +928,7 @@
                 <!-- Progress -->
                 <div class="flex items-center justify-between text-sm text-slate-500">
                     <div class="flex items-center gap-3">
-                        <span>Question {questionNumber}</span>
+                        <span>Question {questionNumber} of {getQuizQuestionCount()}</span>
                         {#if question.time_limit_seconds > 0}
                             <span class="badge badge-outline gap-1.5 px-3 py-2 text-xs font-bold {timerClass()}">
                                 {#if timeRemaining <= 10}
@@ -903,7 +953,7 @@
                 <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
                     <div
                         class="h-full rounded-full bg-indigo-600 transition-all duration-500"
-                        style="width: {Math.min(questionNumber * 10, 100)}%"
+                        style="width: {Math.min((questionNumber / getQuizQuestionCount()) * 100, 100)}%"
                     ></div>
                 </div>
 
@@ -968,6 +1018,31 @@
                             </div>
                         </div>
                     {/if}
+                </div>
+
+                <!-- Compact question feedback; independent from answer/timer state. -->
+                <div class="flex items-center justify-center gap-3 py-1 text-xs text-slate-500">
+                    <span>Was this question helpful?</span>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-xs inline-flex min-h-8 gap-1.5 whitespace-nowrap rounded-lg border-slate-200 bg-white px-2.5 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 {questionFeedback === 'like' ? 'border-emerald-300 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : ''}"
+                            onclick={() => selectQuestionFeedback('like')}
+                            disabled={feedbackSaving}
+                        >
+                            <span class="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-100 text-emerald-700"><ThumbsUp size={12} /></span>
+                            Like
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-xs inline-flex min-h-8 gap-1.5 whitespace-nowrap rounded-lg border-slate-200 bg-white px-2.5 text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 {questionFeedback === 'dislike' ? 'border-rose-300 bg-rose-50 text-rose-700 ring-1 ring-rose-200' : ''}"
+                            onclick={() => selectQuestionFeedback('dislike')}
+                            disabled={feedbackSaving}
+                        >
+                            <span class="flex h-5 w-5 items-center justify-center rounded-md bg-rose-100 text-rose-700"><ThumbsDown size={12} /></span>
+                            Dislike
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Actions -->

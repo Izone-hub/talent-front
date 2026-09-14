@@ -24,6 +24,15 @@ export const applicationService = {
         return response;
     },
 
+    getCandidateFeedback: async (id) => {
+        try {
+            return await apiClient.get(`/admin/applications/${id}/feedback`);
+        } catch (error) {
+            console.warn('Failed to load candidate feedback:', error);
+            return null;
+        }
+    },
+
     getJobApplications: async (jobId) => {
         const response = await apiClient.get(`/jobs/${jobId}/applications`);
         return response || [];
