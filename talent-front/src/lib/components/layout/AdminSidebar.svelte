@@ -1,8 +1,8 @@
 <script>
     import { page } from "$app/stores";
     import { ADMIN_NAVIGATION_LINKS } from "$lib/constants/navigation";
-    import * as Icons from "lucide-svelte";
-    import { ChevronRight, LogOut, ShieldCheck } from "lucide-svelte";
+    import * as Icons from "@lucide/svelte";
+    import { ChevronRight, LogOut, ShieldCheck } from "@lucide/svelte";
     import { auth } from "$lib/stores/authStore";
 
     export let isOpen = true;

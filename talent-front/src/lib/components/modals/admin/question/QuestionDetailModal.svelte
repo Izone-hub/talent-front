@@ -26,7 +26,7 @@
         Loader2,
         CheckCircle2,
         Terminal,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import DeleteConfirmationModal from "../common/DeleteConfirmationModal.svelte";
     import { questionService } from "$lib/api/questions.service";
     import { tagService } from "$lib/api/tag.service";

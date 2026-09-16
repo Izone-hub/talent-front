@@ -1,7 +1,7 @@
 <script>
     import { tagService } from "$lib/api/tag.service";
     import { showToast } from "$lib/stores/toast";
-    import { Plus } from "lucide-svelte";
+    import { Plus } from "@lucide/svelte";
 
     let { onSuccess } = $props();
 

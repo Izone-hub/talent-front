@@ -21,7 +21,7 @@
         ArrowLeft as BackIcon,
         Plus,
         Trash2,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { jobService } from "$lib/api/job.service";
     import { jobDescriptionService } from "$lib/api/jobDescription.service";
     import { tagService } from "$lib/api/tag.service";

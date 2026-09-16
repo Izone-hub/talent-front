@@ -13,7 +13,7 @@
         RefreshCw,
         BarChart3,
         Activity,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";
     import AdminDashboardSkeleton from "$lib/components/ui/skeletons/AdminDashboardSkeleton.svelte";
 

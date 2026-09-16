@@ -1,5 +1,5 @@
 <script>
-    import { Plus, Edit, Trash2, Briefcase, HelpCircle, ArrowLeft, X, Search } from "lucide-svelte";
+    import { Plus, Edit, Trash2, Briefcase, HelpCircle, ArrowLeft, X, Search } from "@lucide/svelte";
     import { tagService } from "$lib/api/tag.service";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";

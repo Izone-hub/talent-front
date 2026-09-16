@@ -10,7 +10,7 @@
         ChevronDown,
         ChevronRight,
         AlertCircle,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { questionService } from "$lib/api/questions.service";
     import { showToast } from "$lib/stores/toast";
     import CodeEditor from "$lib/components/ui/CodeEditor.svelte";

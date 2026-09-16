@@ -3,7 +3,7 @@
 	import { intelligenceService } from "$lib/api/intelligence.service";
 	import { quizService } from "$lib/api/quiz.service";
 	import { goto } from "$app/navigation";
-	import { ChevronLeft, XCircle, Target, BrainCircuit, Loader2, GitBranch, FileText, Brain, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-svelte";
+	import { ChevronLeft, XCircle, Target, BrainCircuit, Loader2, GitBranch, FileText, Brain, MessageSquare, ThumbsUp, ThumbsDown } from "@lucide/svelte";
 
 	let userId = $derived($page.url.searchParams.get("user_id"));
 	let quizId = $derived($page.params.id);

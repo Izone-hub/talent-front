@@ -3,7 +3,7 @@
     import { tagService } from "$lib/api/tag.service";
     import { jobService } from "$lib/api/job.service";
     import { showToast } from "$lib/stores/toast";
-    import { Link, Search, X, Check, Briefcase, Info } from "lucide-svelte";
+    import { Link, Search, X, Check, Briefcase, Info } from "@lucide/svelte";
 
     let { tag, onSuccess } = $props();
 

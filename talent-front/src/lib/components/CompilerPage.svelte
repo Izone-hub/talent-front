@@ -1,6 +1,6 @@
 <script>
     import { onMount } from "svelte";
-    import { Play, Terminal, ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle2, Clock, FunctionSquare } from "lucide-svelte";
+    import { Play, Terminal, ChevronDown, ChevronUp, Loader2, AlertCircle, CheckCircle2, Clock, FunctionSquare } from "@lucide/svelte";
     import { sandboxService } from "$lib/api/sandbox.service";
     import { showToast } from "$lib/stores/toast";
 

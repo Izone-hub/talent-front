@@ -16,7 +16,7 @@
         Flame,
         Trophy,
         Award,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { showToast } from "$lib/stores/toast";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";

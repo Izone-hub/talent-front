@@ -8,7 +8,7 @@
         Search,
         ArrowLeft,
         X,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { getCategoryConfig } from "$lib/utils/jobCategories";
     import EmptyState from "$lib/components/ui/EmptyState.svelte";
     import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";

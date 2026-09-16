@@ -1,5 +1,5 @@
 <script>
-    import { ShieldAlert } from "lucide-svelte";
+    import { ShieldAlert } from "@lucide/svelte";
     import { fade } from "svelte/transition";
 
     export let isOpen = false;

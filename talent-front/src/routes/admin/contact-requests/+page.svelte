@@ -3,7 +3,7 @@
     import { contactRequestsService } from '$lib/api/contactRequests.service';
     import AdminPageHeader from '$lib/components/ui/AdminPageHeader.svelte';
     import EmptyState from '$lib/components/ui/EmptyState.svelte';
-    import { ChevronLeft, ChevronRight, Mail, RefreshCw, ArrowRight } from 'lucide-svelte';
+    import { ChevronLeft, ChevronRight, Mail, RefreshCw, ArrowRight } from "@lucide/svelte";
 
     const PAGE_SIZE = 50;
     let requests = $state([]);

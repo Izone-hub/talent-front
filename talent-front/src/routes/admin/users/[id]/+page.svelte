@@ -25,7 +25,7 @@
         User,
         MapPin,
         ShieldCheck,
-    } from 'lucide-svelte';
+    } from "@lucide/svelte";
 
     const statusConfig = {
         submitted: { label: 'Submitted', class: 'bg-blue-50 text-blue-700' },

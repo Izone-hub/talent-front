@@ -1,7 +1,7 @@
 <script>
     import { tagService } from "$lib/api/tag.service";
     import { showToast } from "$lib/stores/toast";
-    import { Trash2, AlertTriangle } from "lucide-svelte";
+    import { Trash2, AlertTriangle } from "@lucide/svelte";
 
     let { tag, onSuccess } = $props();
 

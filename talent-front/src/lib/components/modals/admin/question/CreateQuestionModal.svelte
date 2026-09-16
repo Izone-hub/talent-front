@@ -15,7 +15,7 @@
         AlertCircle,
         Search,
         Sparkles,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { onMount } from "svelte";
     import { tagService } from "$lib/api/tag.service";
     import { questionGenerationService } from "$lib/api/questionGeneration.service";
