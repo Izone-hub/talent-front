@@ -119,19 +119,28 @@ export const tagService = {
     },
 
     assignTagsToJob: async (jobId, tagNames, allTags = []) => {
-        const promises = tagNames.map(async (tagName) => {
-            // Find the tag object from the full list to get its ID
-            const tagObj = allTags.find(
-                (t) => (t.name || t.Name || '').toLowerCase() === tagName.toLowerCase()
-            );
-            const tagId = tagObj?.id || tagObj?.ID;
-            if (tagId) {
-                return apiClient.post('/tags/assign', { tag_id: tagId, job_id: jobId });
-            } else {
-                // Fallback: assign by name if ID not found
-                return apiClient.post('/tags/assign', { tag_name: tagName, job_id: jobId });
-            }
-        });
-        return Promise.allSettled(promises);
+        const validPromises = tagNames
+            .map(async (tagName) => {
+                if (!tagName || typeof tagName !== 'string') return null;
+                const trimmed = tagName.trim();
+                // Find the tag object from the full list to get its ID
+                const tagObj = allTags.find(
+                    (t) => (t.name || t.Name || '').toLowerCase() === trimmed.toLowerCase()
+                );
+                const tagId = tagObj?.id || tagObj?.ID;
+                if (tagId) {
+                    return apiClient.post('/tags/assign', { tag_id: tagId, job_id: jobId });
+                } else if (trimmed.length <= 30 && !trimmed.includes('\n') && !trimmed.startsWith('-')) {
+                    // Fallback: assign by name only if it is a concise tag identifier
+                    try {
+                        return await apiClient.post('/tags/assign', { tag_name: trimmed, job_id: jobId });
+                    } catch {
+                        return null;
+                    }
+                }
+                return null;
+            })
+            .filter(Boolean);
+        return Promise.allSettled(validPromises);
     }
 };

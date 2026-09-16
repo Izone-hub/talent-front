@@ -36,11 +36,12 @@
         enabled: false,
         reason: "",
     });
-    let tabLockTriggered = false;
+    let isPageUnloading = false;
 
     let phase = $state("loading");
     let quiz = $state(null);
     let question = $state(null);
+    let currentQuestionData = $state(null);
     let questionNumber = $state(0);
     let totalQuestions = $state(10);
     let selectedOption = $state("");
@@ -58,10 +59,13 @@
     let feedbackSaving = $state(false);
 
     function getQuizQuestionCount() {
-        return totalQuestions || quiz?.questions_per_quiz || quiz?.total_questions || 10;
+        return currentQuestionData?.total_questions || totalQuestions || quiz?.questions_per_quiz || quiz?.total_questions || 10;
     }
 
     function isLastQuestion() {
+        if (currentQuestionData && currentQuestionData.is_last_question !== undefined) {
+            return Boolean(currentQuestionData.is_last_question);
+        }
         return questionNumber >= getQuizQuestionCount();
     }
 
@@ -101,11 +105,13 @@
     }
 
     function isCoding(q) {
-        return q?.question_type === "coding_challenge";
+        const type = (q?.question_type || q?.type || "").toLowerCase();
+        return type.includes("coding");
     }
 
     function isMcq(q) {
-        return q?.question_type === "multiple_choice" || q?.question_type === "multiple_select" || q?.question_type === "true_false";
+        const type = (q?.question_type || q?.type || "").toLowerCase();
+        return type.includes("multiple") || type.includes("true_false") || type === "mcq";
     }
 
     function codingDetails(q) {
@@ -141,20 +147,20 @@
         }
     }
 
-    // --- Quiz anti-cheat (deterrence only) ---
+    // --- Quiz anti-cheat (strict lockdown & deterrence) ---
 
     function isDevToolsShortcut(e) {
         const key = (e.key || "").toLowerCase();
         const mod = e.ctrlKey || e.metaKey;
         const shift = e.shiftKey;
 
-        if (mod && shift && (key === "i" || key === "j" || key === "c")) {
+        if (e.key === "F12" || key === "f12") {
             return true;
         }
-        if (mod && key === "u") {
+        if (mod && shift && (key === "i" || key === "j" || key === "c" || key === "k")) {
             return true;
         }
-        if (!mod && key === "f12") {
+        if (mod && (key === "u" || key === "s" || key === "p")) {
             return true;
         }
 
@@ -165,9 +171,8 @@
         if (!antiCheat.enabled) {
             antiCheat.enabled = true;
             antiCheat.reason = reason || "quiz-active";
-            tabLockTriggered = false;
+            isPageUnloading = false;
             attachAntiCheatListeners();
-            attachDevToolsHeuristic();
         }
     }
 
@@ -176,7 +181,6 @@
         antiCheat.enabled = false;
         antiCheat.reason = "";
         detachAntiCheatListeners();
-        detachDevToolsHeuristic();
     }
 
     function attachAntiCheatListeners() {
@@ -186,6 +190,8 @@
         window.addEventListener("copy", onCopy, true);
         window.addEventListener("cut", onCut, true);
         window.addEventListener("paste", onPaste, true);
+        window.addEventListener("beforeinput", onBeforeInput, true);
+        window.addEventListener("drop", onDrop, true);
         window.addEventListener("dragstart", onDragStart, true);
         window.addEventListener("keydown", onKeydown, true);
         window.addEventListener("keyup", onKeyup, true);
@@ -208,6 +214,8 @@
         window.removeEventListener("copy", onCopy, true);
         window.removeEventListener("cut", onCut, true);
         window.removeEventListener("paste", onPaste, true);
+        window.removeEventListener("beforeinput", onBeforeInput, true);
+        window.removeEventListener("drop", onDrop, true);
         window.removeEventListener("dragstart", onDragStart, true);
         window.removeEventListener("keydown", onKeydown, true);
         window.removeEventListener("keyup", onKeyup, true);
@@ -223,7 +231,7 @@
         }
     }
 
-    // Allow-list of interactive elements where text entry must still work.
+    // Allow-list of interactive elements where text entry and cursor selection must still work.
     function isInteractiveInputTarget(node) {
         if (!node) return false;
 
@@ -232,9 +240,8 @@
 
         if (node.isContentEditable) return true;
 
-        // The quiz's code editor is the one place where rich code editing must
-        // remain fully usable. Treat its root wrapper as interactive.
-        if (node.classList && node.classList.contains("codemirror-wrapper")) return true;
+        // The quiz's code editor is where rich code editing must remain usable for typing.
+        if (node.classList && (node.classList.contains("codemirror-wrapper") || node.classList.contains("cm-content") || node.classList.contains("cm-editor"))) return true;
 
         if (node.getAttribute && node.getAttribute("contenteditable") === "true") return true;
 
@@ -253,14 +260,9 @@
     function isQuizContentNode(node) {
         if (!node) return false;
 
-        // Walk up the DOM tree looking for the quiz question card or its
-        // container. This is more reliable than checking a single class.
         let cur = node;
         while (cur && cur !== document && cur !== window) {
             if (cur.classList) {
-                // The question card and the main active-quiz container both
-                // carry 'space-y-4'. The question text <h2> is a direct child
-                // of the card, so checking the card and its ancestors is enough.
                 if (
                     cur.classList.contains("space-y-4") ||
                     cur.classList.contains("rounded-2xl")
@@ -275,41 +277,95 @@
     }
 
     function blockDefault(e) {
-        if (e.cancelable) {
-            e.preventDefault();
+        if (!e) return;
+        try {
+            if (typeof e.preventDefault === "function") {
+                e.preventDefault();
+            }
+        } catch {}
+        try {
+            if (typeof e.stopPropagation === "function") {
+                e.stopPropagation();
+            }
+        } catch {}
+        try {
+            if (typeof e.stopImmediatePropagation === "function") {
+                e.stopImmediatePropagation();
+            }
+        } catch {}
+    }
+
+    let clipboardToastCooldownUntil = 0;
+    function showClipboardToast() {
+        const now = Date.now();
+        if (now < clipboardToastCooldownUntil) return;
+        clipboardToastCooldownUntil = now + 2500;
+        showToast("Copy, cut, and paste are disabled during the quiz.", "warning", 2500);
+    }
+
+    function isClipboardShortcut(e) {
+        const mod = e.ctrlKey || e.metaKey;
+        const key = (e.key || "").toLowerCase();
+
+        // Ctrl/Cmd + C, X, V
+        if (mod && (key === "c" || key === "x" || key === "v")) {
+            return true;
         }
-        if (e.stopPropagation) {
-            e.stopPropagation();
+
+        // Secondary / platform clipboard shortcuts (Ctrl+Insert = copy, Shift+Insert = paste, Shift+Delete = cut)
+        if (e.ctrlKey && key === "insert") {
+            return true;
         }
+        if (e.shiftKey && key === "insert") {
+            return true;
+        }
+        if (e.shiftKey && key === "delete" && !mod && !e.altKey) {
+            return true;
+        }
+
+        return false;
     }
 
     function onContextMenu(e) {
-        if (!antiCheat.enabled) return;
-
-        // Block context menu globally while the quiz is active.
+        if (!antiCheat.enabled || phase !== "active") return;
+        // Block context menu globally while the quiz is active to prevent Inspect / View Source / Context menu copy/paste.
         blockDefault(e);
     }
 
     function onCopy(e) {
-        if (!antiCheat.enabled) return;
-        // Prevent quiz questions and answers from being copied to external tools.
+        if (!antiCheat.enabled || phase !== "active") return;
         blockDefault(e);
+        showClipboardToast();
     }
 
     function onCut(e) {
-        if (!antiCheat.enabled) return;
-        // Prevent quiz content from being moved out of the active attempt.
+        if (!antiCheat.enabled || phase !== "active") return;
         blockDefault(e);
+        showClipboardToast();
     }
 
     function onPaste(e) {
-        if (!antiCheat.enabled) return;
-        // Do not allow externally prepared answers to enter quiz controls.
+        if (!antiCheat.enabled || phase !== "active") return;
         blockDefault(e);
+        showClipboardToast();
+    }
+
+    function onBeforeInput(e) {
+        if (!antiCheat.enabled || phase !== "active") return;
+        if (e.inputType && (e.inputType.startsWith("insertFromPaste") || e.inputType === "insertFromDrop")) {
+            blockDefault(e);
+            showClipboardToast();
+        }
+    }
+
+    function onDrop(e) {
+        if (!antiCheat.enabled || phase !== "active") return;
+        blockDefault(e);
+        showClipboardToast();
     }
 
     function onDragStart(e) {
-        if (!antiCheat.enabled) return;
+        if (!antiCheat.enabled || phase !== "active") return;
 
         const target = e.target || e.srcElement;
         if (!closestInteractiveInput(target) && isQuizContentNode(target)) {
@@ -318,54 +374,53 @@
     }
 
     function onBeforeUnload(e) {
-        if (!antiCheat.enabled) return;
+        if (!antiCheat.enabled || phase !== "active" || submitted) return;
+        isPageUnloading = true;
         e.preventDefault();
-        e.returnValue = "";
+        e.returnValue = "A quiz is in progress. Refreshing or leaving the page will not submit your quiz.";
+        return e.returnValue;
     }
 
     function onKeydown(e) {
-        if (!antiCheat.enabled) return;
-
-        // DevTools shortcuts: interrupt the quiz immediately.
-        if (isDevToolsShortcut(e)) {
-            blockDefault(e);
-            triggerAntiCheatViolation("DevTools shortcut detected");
-            return;
-        }
+        if (!antiCheat.enabled || phase !== "active") return;
 
         const mod = e.ctrlKey || e.metaKey;
         const key = (e.key || "").toLowerCase();
 
-        // Ctrl/Cmd + C/X: block copying or cutting quiz content and answers.
-        if (mod && (key === "c" || key === "x")) {
+        // 1. Block Page Refresh (F5, Ctrl+R, Cmd+R, Ctrl+Shift+R, Cmd+Shift+R)
+        if (
+            e.key === "F5" ||
+            key === "f5" ||
+            (mod && key === "r")
+        ) {
             blockDefault(e);
-            triggerAntiCheatViolation(
-                key === "c" ? "Copy blocked" : "Cut blocked"
-            );
+            showToast("Page refresh is disabled during the quiz. Please complete your questions.", "warning", 4000);
             return;
         }
 
-        // Ctrl/Cmd + V: block prepared answers from entering answer fields.
-        if (mod && key === "v") {
+        // 2. Block Inspect / Developer Tools shortcuts as non-disruptive deterrents
+        if (isDevToolsShortcut(e)) {
             blockDefault(e);
-            triggerAntiCheatViolation("Paste blocked");
             return;
         }
 
-        // Ctrl/Cmd + A : block outside interactive inputs to prevent selecting
-        // the entire quiz page content.
+        // 3. Block Copy / Cut / Paste shortcuts unconditionally everywhere during active quiz
+        if (isClipboardShortcut(e)) {
+            blockDefault(e);
+            showClipboardToast();
+            return;
+        }
+
+        // 4. Ctrl/Cmd + A: allow inside interactive inputs for code/text editing, block outside to prevent selecting entire quiz page
         if (mod && key === "a") {
             const target = e.target || e.srcElement;
             if (closestInteractiveInput(target)) return;
             blockDefault(e);
-            triggerAntiCheatViolation("Select-all blocked");
             return;
         }
     }
 
     function onKeyup(e) {
-        // Keep key-up handlers minimal; mainly used to reset any transient
-        // per-key state if needed in future.
     }
 
     function onSelectionChange() {
@@ -374,7 +429,6 @@
         const sel = window.getSelection ? window.getSelection() : null;
         if (!sel) return;
 
-        // If the selection is entirely within interactive inputs, allow it.
         if (sel.rangeCount > 0) {
             const range = sel.getRangeAt(0);
             if (range) {
@@ -383,8 +437,6 @@
             }
         }
 
-        // If the selection is effectively inside the quiz content area, nudge it
-        // back to an empty selection without disrupting typing.
         if (sel.toString().length > 0) {
             const target = sel.anchorNode || sel.focusNode;
             if (target && !closestInteractiveInput(target) && isQuizContentNode(target)) {
@@ -394,92 +446,36 @@
                         newSel.removeAllRanges();
                     }
                 } catch {
-                    // ignore selection errors
                 }
             }
         }
     }
 
-    let lastVisibleAt = 0;
-    let visibilityViolationCooldownUntil = 0;
+    let visibilityWarningCooldownUntil = 0;
 
     function onVisibilityChange() {
-        if (!antiCheat.enabled) return;
+        if (!antiCheat.enabled || isPageUnloading || submitted || phase !== "active") return;
 
         const now = Date.now();
-        if (now < visibilityViolationCooldownUntil) return;
+        if (now < visibilityWarningCooldownUntil) return;
 
         if (document.visibilityState === "hidden") {
-            terminateQuizForTabLoss("Switched away from quiz tab");
-            visibilityViolationCooldownUntil = now + 4000;
-        } else {
-            // Returned to the tab: give a small grace window before any further
-            // detection so navigation/click noise does not re-trigger immediately.
-            visibilityViolationCooldownUntil = now + 1500;
+            showToast("Please keep focus on the quiz window to complete your assessment.", "info", 3000);
+            visibilityWarningCooldownUntil = now + 6000;
         }
     }
 
     function onWindowBlur() {
-        if (!antiCheat.enabled) return;
+        if (!antiCheat.enabled || isPageUnloading || submitted || phase !== "active") return;
 
         const now = Date.now();
-        if (now < visibilityViolationCooldownUntil) return;
+        if (now < visibilityWarningCooldownUntil) return;
 
-        // Window blur can fire on modal dialogs or popup windows. Cooldown it.
-        terminateQuizForTabLoss("Quiz window lost focus");
-        visibilityViolationCooldownUntil = now + 4000;
+        showToast("Please keep focus on the quiz window to complete your assessment.", "info", 3000);
+        visibilityWarningCooldownUntil = now + 6000;
     }
 
     function onWindowFocus() {
-        if (!antiCheat.enabled) return;
-        const now = Date.now();
-        visibilityViolationCooldownUntil = now + 1500;
-    }
-
-    function triggerAntiCheatViolation(reason) {
-        antiCheat.reason = reason;
-
-        showToast(
-            `Quiz warning: ${reason}. Please stay on this page and try again.`,
-            "warning",
-            6000
-        );
-    }
-
-    async function terminateQuizForTabLoss(reason) {
-        if (!antiCheat.enabled || tabLockTriggered || isSubmitting) return;
-        tabLockTriggered = true;
-        triggerAntiCheatViolation(`${reason}; quiz terminated`);
-        resultMessage = `Quiz terminated: ${reason}.`;
-        stopTimer();
-        await submitQuiz();
-    }
-
-    // DevTools heuristics: browsers differ a lot, so we only treat a growing
-    // outer-window size as a weak secondary signal and never as the sole cause.
-    let lastOuterSize = 0;
-    let devtoolsCheckInterval = null;
-
-    function attachDevToolsHeuristic() {
-        if (typeof window === "undefined") return;
-        lastOuterSize = window.outerWidth * window.outerHeight;
-        devtoolsCheckInterval = setInterval(() => {
-            if (!antiCheat.enabled) return;
-            const current = window.outerWidth * window.outerHeight;
-            if (current > lastOuterSize + 50000) {
-                lastOuterSize = current;
-                triggerAntiCheatViolation("Window size change detected");
-            } else {
-                lastOuterSize = current;
-            }
-        }, 600);
-    }
-
-    function detachDevToolsHeuristic() {
-        if (devtoolsCheckInterval) {
-            clearInterval(devtoolsCheckInterval);
-            devtoolsCheckInterval = null;
-        }
     }
 
     function startTimer() {
@@ -519,7 +515,7 @@
 
     async function startQuiz() {
         if (typeof window !== "undefined" && !window.confirm(
-            "Before starting, close other tabs and windows. Leaving this quiz during the attempt will automatically terminate the quiz."
+            "Please ensure you are ready to begin your technical assessment. Take your time and answer each question carefully."
         )) {
             return;
         }
@@ -545,6 +541,7 @@
                 stopTimer();
                 disableAntiCheat();
                 question = null;
+                currentQuestionData = q;
                 resultMessage = q.message || "Quiz complete!";
                 phase = "finished";
                 return;
@@ -554,6 +551,7 @@
                 return;
             }
 
+            currentQuestionData = q;
             const curQ = q.question || q;
 
             if (question) {
@@ -584,6 +582,7 @@
                 code = details.code_template;
             }
             await loadQuestionFeedback(curQ.id);
+            phase = "active";
             startTimer();
         } catch (e) {
             showToast("Failed to load question", "error");
@@ -618,13 +617,6 @@
         }
     }
 
-    function computeIsCorrect(q, answer) {
-        // Coding challenges are graded on the backend; treat as pending.
-        if (isCoding(q)) return false;
-        if (!q.correct_answer) return false;
-        return answer === q.correct_answer;
-    }
-
     async function saveCurrentAnswer() {
         if (!question || isSaving) return;
         isSaving = true;
@@ -637,16 +629,9 @@
             const isSkipped = !selectedOption && !isCoding(question);
             await quizService.saveAnswer(quizId, question.id, answer, timeSpent, isSkipped);
 
-            const isCorrect = computeIsCorrect(question, answer);
             userAnswers = [...userAnswers.filter(a => a.question_id !== question.id), {
                 question_id: question.id,
-                question_text: question.question_text,
-                question_type: question.question_type,
-                difficulty: question.difficulty,
-                options: question.options,
-                correct_answer: question.correct_answer,
                 user_answer: answer,
-                is_correct: isCorrect,
                 is_skipped: isSkipped,
                 time_spent_seconds: timeSpent,
             }];
@@ -706,30 +691,6 @@
             resultMessage = "Quiz submitted successfully!";
             showToast("Quiz submitted!", "success");
             submitted = true;
-
-            const correct = userAnswers.filter(a => a.is_correct).length;
-            const wrong = userAnswers.filter(a => !a.is_correct && !a.is_skipped).length;
-            const skipped = userAnswers.filter(a => a.is_skipped).length;
-            const timeSpent = userAnswers.reduce((s, a) => s + (a.time_spent_seconds || 0), 0);
-            // Use the quiz's real question count as the denominator, not just the
-            // answers saved in THIS session. When a quiz is resumed (reload, new
-            // tab, timeout), earlier answers exist only in the backend, so counting
-            // only session answers would inflate the score.
-            const totalQuestions = Math.max(userAnswers.length, getQuizQuestionCount());
-            const score = totalQuestions > 0 ? Math.round((correct / totalQuestions) * 100) : 0;
-            quizService.saveQuizResult(quizId, {
-                title: quiz?.title || 'Technical Assessment',
-                completed_at: new Date().toISOString(),
-                score,
-                correct_answers: correct,
-                total_questions: totalQuestions,
-                wrong_answers: wrong,
-                skipped,
-                time_spent_seconds: timeSpent,
-                passing_score: 70,
-                passed: score >= 70,
-                answers: userAnswers,
-            });
         } catch (e) {
             if (e.message && e.message.includes("already completed")) {
                 resultMessage = "Quiz was already completed.";
@@ -833,6 +794,7 @@
                     resultMessage = q.message || "You've completed this quiz!";
                 }
             } else if (q && (q.id || q.question?.id)) {
+                currentQuestionData = q;
                 const curQ = q.question || q;
                 question = curQ;
                 questionFeedback = "";
@@ -876,7 +838,7 @@
     }
 </script>
 
-<div class="min-h-screen bg-slate-50 font-sans">
+<div class="min-h-screen bg-slate-50 font-sans {antiCheat.enabled && phase === 'active' ? 'select-none' : ''}">
     <div class="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
 
         <!-- Loading -->
@@ -1013,9 +975,23 @@
                                     language={codingDetails(question)?.language || 'python'}
                                     height="18rem"
                                     placeholder="Write your solution here..."
+                                    disableClipboard={antiCheat.enabled && phase === 'active'}
                                     onrun={handlePrimaryAction}
                                 />
                             </div>
+                        </div>
+                    {:else}
+                        <div class="mt-4">
+                            <label for="quiz-text-answer" class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                Your Answer
+                            </label>
+                            <textarea
+                                id="quiz-text-answer"
+                                bind:value={selectedOption}
+                                rows="6"
+                                placeholder="Type your answer here..."
+                                class="mt-2 w-full rounded-xl border border-slate-200 p-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 select-text"
+                            ></textarea>
                         </div>
                     {/if}
                 </div>
