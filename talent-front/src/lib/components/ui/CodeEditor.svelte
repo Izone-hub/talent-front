@@ -17,6 +17,7 @@
         placeholder = "Write your code here...",
         height = "16rem",
         disabled = false,
+        disableClipboard = false,
         onkeydown = null,
         onrun = null,
     } = $props();
@@ -41,6 +42,47 @@
     let langExtension = $derived.by(() => {
         const factory = LANG_MAP[language] ?? LANG_MAP["python"];
         return factory ? factory() : [];
+    });
+
+    let clipboardExtension = $derived.by(() => {
+        if (!disableClipboard) return [];
+        return EditorView.domEventHandlers({
+            paste(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                return true;
+            },
+            copy(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                return true;
+            },
+            cut(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                return true;
+            },
+            drop(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                return true;
+            },
+            keydown(event) {
+                const mod = event.ctrlKey || event.metaKey;
+                const key = (event.key || "").toLowerCase();
+                if (mod && (key === "c" || key === "x" || key === "v")) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return true;
+                }
+                if ((event.ctrlKey && key === "insert") || (event.shiftKey && key === "insert")) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return true;
+                }
+                return false;
+            },
+        });
     });
 
     const customTheme = EditorView.theme({
@@ -77,6 +119,18 @@
     });
 
     function handleKeydown(e) {
+        if (disableClipboard) {
+            const mod = e.ctrlKey || e.metaKey;
+            const key = (e.key || "").toLowerCase();
+            if (mod && (key === "c" || key === "x" || key === "v")) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            if ((e.ctrlKey && key === "insert") || (e.shiftKey && key === "insert")) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
         if (onkeydown) onkeydown(e);
         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
             if (onrun) {
@@ -87,12 +141,19 @@
     }
 </script>
 
-<div class="codemirror-wrapper" onkeydown={handleKeydown}>
+<div
+    class="codemirror-wrapper"
+    onkeydown={handleKeydown}
+    oncopy={(e) => { if (disableClipboard) { e.preventDefault(); e.stopPropagation(); } }}
+    oncut={(e) => { if (disableClipboard) { e.preventDefault(); e.stopPropagation(); } }}
+    onpaste={(e) => { if (disableClipboard) { e.preventDefault(); e.stopPropagation(); } }}
+    ondrop={(e) => { if (disableClipboard) { e.preventDefault(); e.stopPropagation(); } }}
+>
     <CodeMirror
         bind:value
         lang={langExtension}
         theme={oneDark}
-        extensions={[customTheme]}
+        extensions={[customTheme, clipboardExtension]}
         {placeholder}
         editable={!disabled}
         readonly={disabled}
@@ -113,6 +174,7 @@
         border-radius: 0.75rem;
         overflow: hidden;
         border: 1px solid #30363d;
+        user-select: text;
     }
 
     .codemirror-wrapper :global(.cm-editor) {

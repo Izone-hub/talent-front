@@ -47,7 +47,9 @@
     const typeConfig = {
         multiple_choice: { label: "Multiple Choice", icon: ListChecks, color: "#6366f1" },
         true_false: { label: "True / False", icon: Check, color: "#3b82f6" },
-        coding_challenge: { label: "Coding Challenge", icon: Terminal, color: "#6b7280" },
+        coding_challenge: { label: "Coding Challenge", icon: Terminal, color: "#10b981" },
+        multiple_select: { label: "Multiple Select", icon: ListChecks, color: "#8b5cf6" },
+        text: { label: "Open Text", icon: HelpCircle, color: "#ec4899" },
     };
 
     const difficultyConfig = {
@@ -92,7 +94,7 @@
             : allQuestions
     );
 
-    // Level 1: group by question_type
+    // Level 1: group by question_type (always include standard types even if count is 0)
     const typeGroups = $derived(() => {
         const groups = new Map();
         for (const q of filteredQuestions) {
@@ -102,9 +104,7 @@
         }
         const ordered = [];
         for (const t of ["multiple_choice", "true_false", "coding_challenge"]) {
-            if (groups.has(t)) {
-                ordered.push({ type: t, questions: groups.get(t) });
-            }
+            ordered.push({ type: t, questions: groups.get(t) || [] });
         }
         for (const [t, qs] of groups) {
             if (!["multiple_choice", "true_false", "coding_challenge"].includes(t)) {
@@ -194,7 +194,7 @@
             isCreateModalOpen = false;
             await loadQuestions();
         } catch (error) {
-            showToast("Failed to create question", "error");
+            showToast(error.message || "Failed to create question", "error");
         }
     }
 
