@@ -21,6 +21,7 @@
         TimerOff,
         ThumbsUp,
         ThumbsDown,
+        ShieldAlert,
     } from "@lucide/svelte";
     import SkeletonQuiz from "$lib/components/ui/SkeletonQuiz.svelte";
     import CodeEditor from "$lib/components/ui/CodeEditor.svelte";
@@ -61,6 +62,7 @@
     let userAnswers = $state([]);
     let questionFeedback = $state("");
     let feedbackSaving = $state(false);
+    let agreedToGuidelines = $state(false);
 
     function getQuizQuestionCount() {
         return currentQuestionData?.total_questions || totalQuestions || quiz?.questions_per_quiz || quiz?.total_questions || 10;
@@ -962,18 +964,56 @@
                 </p>
                 <div class="mt-6 flex flex-wrap justify-center gap-6 text-sm text-slate-500">
                     <span class="flex items-center gap-1.5">
-                        <BarChart3 class="h-4 w-4" />
+                        <BarChart3 class="h-4 w-4 text-indigo-500" />
                         Mixed difficulty
                     </span>
                     <span class="flex items-center gap-1.5">
-                        <Clock class="h-4 w-4" />
+                        <Clock class="h-4 w-4 text-indigo-500" />
                         Per-question timer
                     </span>
+                    <span class="flex items-center gap-1.5">
+                        <ShieldAlert class="h-4 w-4 text-amber-500" />
+                        Anti-cheat monitored
+                    </span>
                 </div>
+
+                <!-- Quiz Rules & Agreement Toggle -->
+                <div class="mx-auto mt-8 max-w-lg text-left rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-3 flex items-center gap-2">
+                        <ShieldAlert class="h-4 w-4 text-amber-600" />
+                        Assessment Rules & Guidelines
+                    </h3>
+                    <ul class="space-y-2 text-xs text-slate-600">
+                        <li class="flex items-start gap-2">
+                            <span class="mt-0.5 inline-block h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                            <span>Clipboard operations (copy, cut, and paste) are disabled during the assessment.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="mt-0.5 inline-block h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                            <span>Switching browser tabs or leaving the assessment window will automatically skip the active question.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="mt-0.5 inline-block h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                            <span>Question timers are backend-enforced and run continuously.</span>
+                        </li>
+                    </ul>
+
+                    <label class="mt-4 pt-4 border-t border-slate-200/80 flex items-start gap-3 cursor-pointer group select-none">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-sm checkbox-primary mt-0.5 rounded-md"
+                            bind:checked={agreedToGuidelines}
+                        />
+                        <span class="text-xs font-medium text-slate-700 group-hover:text-slate-900 leading-snug">
+                            I understand the rules and agree to adhere to all assessment integrity guidelines.
+                        </span>
+                    </label>
+                </div>
+
                 <button
                     onclick={startQuiz}
-                    disabled={phase === "starting"}
-                    class="btn mt-8 gap-2 border-indigo-600 bg-indigo-600 px-8 text-white hover:bg-indigo-700 disabled:opacity-75"
+                    disabled={phase === "starting" || !agreedToGuidelines}
+                    class="btn mt-8 gap-2 border-indigo-600 bg-indigo-600 px-8 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                     {#if phase === "starting"}
                         <Loader2 class="h-4 w-4 animate-spin" />
