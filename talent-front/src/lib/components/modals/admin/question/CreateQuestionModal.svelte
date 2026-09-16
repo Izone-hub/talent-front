@@ -15,7 +15,7 @@
         AlertCircle,
         Search,
         Sparkles,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { onMount } from "svelte";
     import { tagService } from "$lib/api/tag.service";
     import { questionGenerationService } from "$lib/api/questionGeneration.service";
@@ -29,7 +29,7 @@
     let questionData = {
         question_text: "",
         question_type: "multiple_choice",
-        difficulty: "Easy",
+        difficulty: "easy",
         options: [""],
         correct_answer: "",
         explanation: "",
@@ -103,12 +103,16 @@
 
         // Prepare data based on type
         let submitData = { ...questionData };
+        submitData.difficulty = (submitData.difficulty || "easy").toLowerCase();
+        submitData.question_type = (submitData.question_type || "multiple_choice").toLowerCase();
 
-        if (questionData.question_type !== "coding_challenge") {
+        if (submitData.question_type !== "coding_challenge") {
             delete submitData.coding_details;
+        } else {
+            submitData.options = [];
         }
 
-        if (questionData.question_type === "true_false") {
+        if (submitData.question_type === "true_false") {
             submitData.options = ["True", "False"];
         }
 
@@ -242,14 +246,16 @@
             }
             if (parsed && typeof parsed === "object") {
                 if (parsed.question_text) questionData.question_text = parsed.question_text;
-                if (parsed.question_type) questionData.question_type = parsed.question_type;
-                if (parsed.difficulty) questionData.difficulty = parsed.difficulty;
+                if (parsed.question_type) questionData.question_type = String(parsed.question_type).toLowerCase();
+                if (parsed.difficulty) questionData.difficulty = String(parsed.difficulty).toLowerCase();
                 if (parsed.options) questionData.options = parsed.options;
                 if (parsed.correct_answer) questionData.correct_answer = parsed.correct_answer;
                 if (parsed.explanation) questionData.explanation = parsed.explanation;
-                if (parsed.points) questionData.points = parsed.points;
-                if (parsed.time_limit_seconds) questionData.time_limit_seconds = parsed.time_limit_seconds;
-                if (parsed.tags) questionData.tags = parsed.tags;
+                if (parsed.points != null) questionData.points = Number(parsed.points) || questionData.points;
+                if (parsed.time_limit_seconds != null) questionData.time_limit_seconds = Number(parsed.time_limit_seconds) || questionData.time_limit_seconds;
+                if (parsed.tags) {
+                    questionData.tags = Array.isArray(parsed.tags) ? parsed.tags : [String(parsed.tags)];
+                }
                 if (parsed.coding_details) {
                     const merged = { ...questionData.coding_details, ...parsed.coding_details };
                     // AI-generated SQL questions arrive as {database, tests};

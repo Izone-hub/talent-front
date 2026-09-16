@@ -1,5 +1,5 @@
 <script>
-    import { XCircle, Globe, MapPin, Building2, Image } from "lucide-svelte";
+    import { XCircle, Globe, MapPin, Building2, Image } from "@lucide/svelte";
     import { createEventDispatcher } from "svelte";
 
     const dispatch = createEventDispatcher();

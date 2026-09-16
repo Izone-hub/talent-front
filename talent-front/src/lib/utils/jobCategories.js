@@ -13,7 +13,7 @@ import {
     TrendingUp,
     Users,
     Headphones,
-} from "lucide-svelte";
+} from "@lucide/svelte";
 
 // Category visuals shared by the admin Jobs and Applications pages so every
 // card for the same category looks identical (same icon, same color).

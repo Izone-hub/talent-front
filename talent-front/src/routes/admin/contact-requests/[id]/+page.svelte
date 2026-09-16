@@ -3,7 +3,7 @@
     import { goto } from '$app/navigation';
     import { contactRequestsService } from '$lib/api/contactRequests.service';
     import { showToast } from '$lib/stores/toast';
-    import { ArrowLeft, Calendar, Mail, Building2, Tag, Loader2, Send, Trash2 } from 'lucide-svelte';
+    import { ArrowLeft, Calendar, Mail, Building2, Tag, Loader2, Send, Trash2 } from "@lucide/svelte";
     import DeleteConfirmationModal from '$lib/components/modals/admin/common/DeleteConfirmationModal.svelte';
 
     const statuses = ['new', 'read', 'replied', 'archived'];

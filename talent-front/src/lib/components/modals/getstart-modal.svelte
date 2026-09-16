@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation'
 	import { createEventDispatcher } from 'svelte'
-	import { ArrowBigRight } from 'lucide-svelte'
+	import { ArrowBigRight } from "@lucide/svelte"
 
 	export let isOpen = false
 

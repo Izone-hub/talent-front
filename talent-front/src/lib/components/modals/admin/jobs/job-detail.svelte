@@ -11,7 +11,7 @@
         Archive,
         Pencil,
         X,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { jobService } from "$lib/api/job.service";
     import { showToast } from "$lib/stores/toast";
     import EditJobModal from "./edit-job.svelte";

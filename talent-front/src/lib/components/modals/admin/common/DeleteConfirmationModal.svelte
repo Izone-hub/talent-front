@@ -1,6 +1,6 @@
 <script>
     import { createEventDispatcher } from "svelte";
-    import { Trash2, X, AlertTriangle } from "lucide-svelte";
+    import { Trash2, X, AlertTriangle } from "@lucide/svelte";
     import { fly, fade } from "svelte/transition";
 
     export let isOpen = false;

@@ -1,5 +1,5 @@
 <script>
-	import { Sparkles, Copy, Check, RotateCcw } from 'lucide-svelte';
+	import { Sparkles, Copy, Check, RotateCcw } from "@lucide/svelte";
 	import { jobDescriptionService } from '$lib/api/jobDescription.service';
 	import { showToast } from '$lib/stores/toast';
 	import AdminPageHeader from '$lib/components/ui/AdminPageHeader.svelte';

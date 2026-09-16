@@ -15,7 +15,7 @@
         ArrowRight,
         X,
         Wand2,
-    } from 'lucide-svelte';
+    } from "@lucide/svelte";
 
     const PAGE_SIZE = 50;
 

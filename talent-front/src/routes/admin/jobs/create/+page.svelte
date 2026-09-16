@@ -1,4 +1,5 @@
 <script>
+    import { onMount } from "svelte";
     import { goto } from "$app/navigation";
     import { page } from "$app/stores";
     import {
@@ -20,7 +21,7 @@
         ArrowLeft as BackIcon,
         Plus,
         Trash2,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { jobService } from "$lib/api/job.service";
     import { jobDescriptionService } from "$lib/api/jobDescription.service";
     import { tagService } from "$lib/api/tag.service";
@@ -77,6 +78,9 @@
         try {
             const data = await tagService.listTags();
             allTags = data || [];
+            if (jobData.category || jobData.title || jobData.description) {
+                autoSelectTags(true);
+            }
         } catch (error) {
             console.error("Failed to load tags:", error);
             allTags = [];
@@ -85,7 +89,7 @@
         }
     }
 
-    $effect(() => {
+    onMount(() => {
         loadTags();
     });
 
@@ -100,16 +104,9 @@
         return (match && (match.color || match.Color)) || "#7C3AED";
     }
 
-    function getSuggestedTags() {
-        const lower = requirementTags.map((t) => t.toLowerCase());
-        return allTags.filter(
-            (t) => !lower.includes(tagName(t).toLowerCase()),
-        );
-    }
-
     function filteredTags() {
         const q = tagSearch.trim().toLowerCase();
-        return getSuggestedTags().filter((t) => {
+        return allTags.filter((t) => {
             const name = tagName(t);
             return !q || name.toLowerCase().includes(q);
         });
@@ -128,30 +125,119 @@
 
     const categoryRequirements = {
         full_stack_developer: {
-            tags: ["React", "TypeScript", "Node.js", "PostgreSQL", "REST APIs", "Git", "Docker", "AWS"],
+            tags: ["svelte", "go", "python", "sql", "docker", "basic", "arrays"],
             responsibilities: "• Build and maintain full-stack web applications\n• Design and implement RESTful APIs\n• Collaborate with product and design teams\n• Write clean, testable, and well-documented code"
         },
         web_developer: {
-            tags: ["HTML", "CSS", "JavaScript", "React", "Responsive Design", "Git", "REST APIs", "SEO"],
+            tags: ["svelte", "sql", "basic", "arrays"],
             responsibilities: "• Build responsive and interactive web applications\n• Optimize pages for maximum speed and scalability\n• Collaborate with designers to implement visual elements\n• Maintain and improve existing web projects"
         },
         frontend_developer: {
-            tags: ["React", "TypeScript", "CSS", "HTML", "Tailwind CSS", "Redux", "Next.js", "Figma"],
+            tags: ["svelte", "basic", "arrays"],
             responsibilities: "• Develop user-facing features using modern frontend frameworks\n• Ensure responsive design across all devices\n• Optimize applications for performance and accessibility\n• Collaborate with backend developers and designers"
         },
         backend_developer: {
-            tags: ["Node.js", "Python", "Go", "PostgreSQL", "Redis", "Docker", "REST APIs", "AWS"],
+            tags: ["go", "python", "sql", "docker", "basic", "arrays", "sum"],
             responsibilities: "• Design and implement scalable backend services\n• Build and maintain RESTful APIs\n• Manage database schemas and optimize queries\n• Ensure system security and performance"
         },
         system_architect: {
-            tags: ["AWS", "Docker", "Kubernetes", "Microservices", "System Design", "CI/CD", "Terraform", "PostgreSQL"],
+            tags: ["docker", "go", "sql", "python", "basic"],
             responsibilities: "• Define and oversee technical architecture\n• Make key design and infrastructure decisions\n• Guide engineering teams on best practices\n• Ensure system scalability and reliability"
         },
         mobile_developer: {
-            tags: ["React Native", "Flutter", "Swift", "Kotlin", "TypeScript", "REST APIs", "Git", "Firebase"],
+            tags: ["basic", "arrays", "sql", "python"],
             responsibilities: "• Build and maintain mobile applications for iOS and Android\n• Implement responsive and performant UIs\n• Integrate with backend APIs and third-party services\n• Test, debug, and optimize app performance"
         }
     };
+
+    const tagAliases = {
+        go: ["go", "golang"],
+        python: ["python", "py", "django", "flask", "fastapi"],
+        docker: ["docker", "container", "containers", "devops", "kubernetes", "k8s"],
+        sql: ["sql", "postgres", "postgresql", "mysql", "database", "databases", "rdbms", "queries"],
+        svelte: ["svelte", "sveltekit", "frontend", "ui", "web"],
+        arrays: ["array", "arrays", "data structure", "data structures", "algorithm", "algorithms", "dsa"],
+        basic: ["basic", "basics", "fundamental", "fundamentals", "core", "junior", "entry"],
+        sum: ["sum", "math", "arithmetic", "algorithm", "problem solving"]
+    };
+
+    function autoSelectTags(silent = true) {
+        if (!allTags || allTags.length === 0) return;
+
+        const corpus = [
+            jobData.title,
+            jobData.description,
+            jobData.requirements,
+            jobData.responsibilities,
+            jobData.category,
+            ...(categoryRequirements[jobData.category]?.tags || [])
+        ].filter(Boolean).join(" ").toLowerCase();
+
+        const newlySelected = [];
+
+        for (const tag of allTags) {
+            const tName = tagName(tag);
+            if (!tName) continue;
+            const tLower = tName.toLowerCase();
+
+            if (requirementTags.some((t) => t.toLowerCase() === tLower)) {
+                continue;
+            }
+
+            const aliases = tagAliases[tLower] || [tLower];
+            let matched = false;
+
+            for (const alias of aliases) {
+                const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                const regex = new RegExp(`(^|[^a-z0-9_])${escaped}([^a-z0-9_]|$)`, "i");
+                if (regex.test(corpus)) {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched && jobData.category) {
+                const catTags = (categoryRequirements[jobData.category]?.tags || []).map((t) => t.toLowerCase());
+                if (catTags.includes(tLower)) {
+                    matched = true;
+                }
+            }
+
+            if (matched) {
+                newlySelected.push(tName);
+            }
+        }
+
+        if (newlySelected.length > 0) {
+            requirementTags = [...requirementTags, ...newlySelected];
+            syncRequirements();
+            if (!silent) {
+                showToast(`Auto-selected ${newlySelected.length} tag${newlySelected.length > 1 ? 's' : ''}: ${newlySelected.join(", ")}`, "success");
+            }
+        } else if (!silent) {
+            showToast("No new matching tags found for current description", "info");
+        }
+    }
+
+    function toggleTag(name) {
+        const lower = name.toLowerCase();
+        if (requirementTags.some((t) => t.toLowerCase() === lower)) {
+            removeTag(name);
+        } else {
+            addTag(name);
+        }
+    }
+
+    function selectAllTags() {
+        const allNames = allTags.map(tagName).filter(Boolean);
+        const existingLower = new Set(requirementTags.map((t) => t.toLowerCase()));
+        const toAdd = allNames.filter((n) => !existingLower.has(n.toLowerCase()));
+        if (toAdd.length > 0) {
+            requirementTags = [...requirementTags, ...toAdd];
+            syncRequirements();
+            showToast(`Selected all ${allTags.length} tags`, "success");
+        }
+    }
 
     let currentSuggestedTags = $state([]);
 
@@ -209,18 +295,10 @@
         }
         const reqData = categoryRequirements[catValue];
         if (reqData) {
-            requirementTags = [];
-            const tagNameSet = new Set(
-                allTags.map((t) => (t.name || t.Name || "").toLowerCase()),
-            );
-            const matched = reqData.tags.filter((t) =>
-                tagNameSet.has(t.toLowerCase()),
-            );
-            requirementTags = matched.length > 0 ? matched : [...reqData.tags];
-            jobData.requirements = requirementTags.join("\n");
             jobData.responsibilities = reqData.responsibilities;
             currentSuggestedTags = reqData.tags;
         }
+        autoSelectTags(true);
         // Auto-advance to next step
         if (currentStep === 1 && currentStep < totalSteps) {
             currentStep++;
@@ -246,7 +324,7 @@
                     jobData.requirements = parsed.requirements;
                     requirementTags = parsed.requirements
                         .split("\n")
-                        .map((r) => r.trim())
+                        .map((r) => r.trim().replace(/^[-•*]\s*/, ""))
                         .filter(Boolean);
                 }
                 if (parsed.responsibilities) jobData.responsibilities = parsed.responsibilities;
@@ -267,6 +345,7 @@
                     if (parsed.salary_max) jobData.salary_max = parsed.salary_max;
                     if (parsed.salary_currency) jobData.salary_currency = parsed.salary_currency;
                 }
+                autoSelectTags(true);
             }
             showAiPrompt = false;
             aiPrompt = "";
@@ -344,6 +423,7 @@
                     if (raw.salary_max) jobData.salary_max = raw.salary_max;
                     if (raw.salary_currency) jobData.salary_currency = raw.salary_currency;
                 }
+                autoSelectTags(true);
                 showToast("Job posting enhanced with AI", "success");
             } else {
                 showToast("AI returned unexpected format", "error");
@@ -423,6 +503,9 @@
         if (validateStep(currentStep) && currentStep < totalSteps) {
             currentStep++;
             stepErrors = {};
+            if (currentStep === 3) {
+                autoSelectTags(true);
+            }
         }
     }
 
@@ -441,6 +524,9 @@
             } else if (validateStep(currentStep)) {
                 currentStep = step;
                 stepErrors = {};
+            }
+            if (currentStep === 3) {
+                autoSelectTags(true);
             }
         }
     }
@@ -762,20 +848,41 @@
                                     Press <kbd class="kbd kbd-xs">Enter</kbd> to add each requirement as a tag
                                 </p>
                                 <!-- Tag picker from tags database -->
-                                <div class="mt-3 border border-slate-200 rounded-xl overflow-hidden">
-                                    <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
-                                        <p class="text-xs font-semibold text-slate-600">
-                                            Select from existing tags
-                                        </p>
-                                        {#if tagLoading}
-                                            <span class="loading loading-spinner loading-xs text-purple-600"></span>
-                                        {/if}
+                                <div class="mt-3 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                    <div class="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-xs font-semibold text-slate-700">
+                                                Select from existing tags
+                                            </p>
+                                            {#if tagLoading}
+                                                <span class="loading loading-spinner loading-xs text-purple-600"></span>
+                                            {/if}
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                class="btn btn-xs bg-purple-100 hover:bg-purple-200 text-purple-700 border-none rounded-lg gap-1 font-semibold transition-all"
+                                                onclick={() => autoSelectTags(false)}
+                                                title="Automatically detect and select tags based on job title, description, and category"
+                                            >
+                                                <Sparkles size={12} class="text-purple-600" />
+                                                Auto-select tags
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="btn btn-xs bg-slate-200 hover:bg-slate-300 text-slate-700 border-none rounded-lg text-[11px]"
+                                                onclick={selectAllTags}
+                                                title="Select all available tags"
+                                            >
+                                                Select all
+                                            </button>
+                                        </div>
                                     </div>
                                     {#if !tagLoading}
-                                        <div class="p-2">
+                                        <div class="p-3">
                                             <input
                                                 type="text"
-                                                class="input input-sm w-full bg-white border-slate-200 focus:border-purple-500 rounded-lg text-xs mb-2"
+                                                class="input input-sm w-full bg-white border-slate-200 focus:border-purple-500 rounded-lg text-xs mb-2.5"
                                                 placeholder="Search tags..."
                                                 bind:value={tagSearch}
                                             />
@@ -788,17 +895,25 @@
                                                     {#each filteredTags() as sTag}
                                                         {@const sName = tagName(sTag)}
                                                         {@const sColor = tagColor(sName)}
+                                                        {@const isSelected = requirementTags.some((t) => t.toLowerCase() === sName.toLowerCase())}
                                                         <button
                                                             type="button"
-                                                            class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] transition-all border border-transparent hover:-translate-y-0.5"
-                                                            style="background-color: {sColor}1A; color: {sColor}; border-color: {sColor}40"
-                                                            onclick={() => addTag(sName)}
+                                                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all border {isSelected ? 'shadow-sm ring-1 ring-offset-1' : 'hover:-translate-y-0.5'}"
+                                                            style={isSelected
+                                                                ? `background-color: ${sColor}; color: #ffffff; border-color: ${sColor}; --tw-ring-color: ${sColor}`
+                                                                : `background-color: ${sColor}15; color: ${sColor}; border-color: ${sColor}40`}
+                                                            onclick={() => toggleTag(sName)}
                                                         >
-                                                            <span
-                                                                class="w-2 h-2 rounded-full inline-block"
-                                                                style="background-color: {sColor}"
-                                                            ></span>
-                                                            + {sName}
+                                                            {#if isSelected}
+                                                                <Check size={12} class="stroke-[3]" />
+                                                                {sName}
+                                                            {:else}
+                                                                <span
+                                                                    class="w-2 h-2 rounded-full inline-block"
+                                                                    style="background-color: {sColor}"
+                                                                ></span>
+                                                                + {sName}
+                                                            {/if}
                                                         </button>
                                                     {/each}
                                                 </div>

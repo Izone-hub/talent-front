@@ -2,10 +2,14 @@ import { apiClient } from './client';
 
 export const jobDescriptionService = {
 	generate: async (prompt, companyName = '') => {
-		const response = await apiClient.post('/admin/generate-job-description', {
-			prompt,
-			company_name: companyName
-		});
+		const response = await apiClient.post(
+			'/admin/generate-job-description',
+			{
+				prompt,
+				company_name: companyName
+			},
+			{ timeoutMs: 120000 }
+		);
 		return response;
 	},
 
@@ -27,9 +31,13 @@ Remote: ${jobData.remote_possible || false}
 
 Instructions: Improve the title to be more compelling, make the description more engaging and professional, ensure requirements are specific and well-structured as a bulleted list, make responsibilities clear and actionable. Keep the same salary range and job type. Return ONLY the JSON object with no extra text.`;
 
-		const response = await apiClient.post('/admin/generate-job-description', {
-			prompt
-		});
+		const response = await apiClient.post(
+			'/admin/generate-job-description',
+			{
+				prompt
+			},
+			{ timeoutMs: 120000 }
+		);
 		return response;
 	}
 };

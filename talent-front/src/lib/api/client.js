@@ -11,7 +11,7 @@ class ApiClient {
 			? endpoint
 			: `/api/v1${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 		const url = `${this.baseUrl}${this.baseUrl.endsWith('/api/v1') ? normalizedEndpoint.replace(/^\/api\/v1/, '') : normalizedEndpoint}`;
-		const timeoutMs = options.timeoutMs ?? 15000;
+		const timeoutMs = options.timeoutMs ?? 60000;
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

@@ -1,5 +1,5 @@
 <script>
-    import { XCircle, Sparkles } from "lucide-svelte";
+    import { XCircle, Sparkles } from "@lucide/svelte";
     import { jobDescriptionService } from "$lib/api/jobDescription.service";
     import { showToast } from "$lib/stores/toast";
 

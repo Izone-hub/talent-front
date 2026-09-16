@@ -1,5 +1,5 @@
 <script>
-	import { ArrowRight, BrainCircuit, Code2, Layers3, Rocket } from 'lucide-svelte';
+	import { ArrowRight, BrainCircuit, Code2, Layers3, Rocket } from "@lucide/svelte";
 
 	const services = [
 		{

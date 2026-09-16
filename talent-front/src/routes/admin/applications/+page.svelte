@@ -29,7 +29,7 @@
         Clock,
         Zap,
         Hourglass,
-    } from 'lucide-svelte';
+    } from "@lucide/svelte";
     import { getCategoryConfig } from '$lib/utils/jobCategories';
 
     // ------------------------------------------------------------------

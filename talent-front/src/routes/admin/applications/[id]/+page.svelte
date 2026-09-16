@@ -3,7 +3,7 @@
     import { applicationService } from "$lib/api/application.service";
     import { intelligenceService } from "$lib/api/intelligence.service";
     import { quizService } from "$lib/api/quiz.service";
-    import { ExternalLink, BrainCircuit, GitBranch, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy, User, Mail, Calendar, MapPin, Link, Star, Clock, Award, ThumbsUp, ThumbsDown, Sparkles, FileText, Code2, MessageSquare } from "lucide-svelte";
+    import { ExternalLink, BrainCircuit, GitBranch, Loader2, ChevronLeft, ChevronDown, Check, X, Target, AlertTriangle, ShieldCheck, BarChart3, Lightbulb, BookOpen, Trophy, User, Mail, Calendar, MapPin, Link, Star, Clock, Award, ThumbsUp, ThumbsDown, Sparkles, FileText, Code2, MessageSquare } from "@lucide/svelte";
     import { showToast } from "$lib/stores/toast";
     import { goto } from "$app/navigation";
 

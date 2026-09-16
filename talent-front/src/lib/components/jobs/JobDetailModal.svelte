@@ -117,7 +117,8 @@
 				showToast("Successfully applied! Take the quiz to proceed.", "success");
 				showSurvey = false;
 				if (response?.quiz_id) {
-					goto(`/quizzes/${response.quiz_id}`);
+					window.open(`/quizzes/${response.quiz_id}`, "_blank");
+					goto("/applications");
 					return;
 				}
 				goto("/applications");

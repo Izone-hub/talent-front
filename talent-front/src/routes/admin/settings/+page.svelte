@@ -1,5 +1,5 @@
 <script>
-    import { Building2, Globe, MapPin, Image, Save, RotateCcw } from "lucide-svelte";
+    import { Building2, Globe, MapPin, Image, Save, RotateCcw } from "@lucide/svelte";
     import { settingsService } from "$lib/api/settings.service";
     import { showToast } from "$lib/stores/toast";
     import AdminPageHeader from "$lib/components/ui/AdminPageHeader.svelte";
