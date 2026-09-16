@@ -4,7 +4,7 @@ export const authApi = {
     // Initiate GitHub login - redirects to GitHub
     githubLogin: () => {
         // Direct redirect to your GitHub login endpoint
-        window.location.href = `${apiClient.baseUrl}/auth/github/login`;
+        window.location.href = `${apiClient.baseUrl}/api/v1/auth/github/login`;
     },
 
     // Get current user info (protected by your middleware)
