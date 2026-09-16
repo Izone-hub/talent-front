@@ -24,13 +24,13 @@ export const quizService = {
 		return apiClient.post(`/questions/${questionId}/feedback`, { feedback });
 	},
 
-    saveAnswer: async (quizId, questionId, userAnswer, timeSpentSeconds, isSkipped) => {
+    saveAnswer: async (quizId, questionId, userAnswer, timeSpentSeconds, isSkipped, options = {}) => {
         return apiClient.post(`/quizzes/${quizId}/answer`, {
             question_id: questionId,
             user_answer: userAnswer,
             time_spent_seconds: timeSpentSeconds,
             is_skipped: isSkipped,
-        });
+        }, options);
     },
 
     runCode: async (quizId, questionId, language, code) => {

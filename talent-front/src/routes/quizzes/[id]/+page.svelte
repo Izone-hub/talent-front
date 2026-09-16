@@ -37,6 +37,10 @@
         reason: "",
     });
     let isPageUnloading = false;
+    let isNavigatingAway = false;
+    let skippedQuestionIds = new Set();
+    let handlingLeaveForQuestionId = null;
+    let questionExpirationTime = null;
 
     let phase = $state("loading");
     let quiz = $state(null);
@@ -195,12 +199,11 @@
         window.addEventListener("dragstart", onDragStart, true);
         window.addEventListener("keydown", onKeydown, true);
         window.addEventListener("keyup", onKeyup, true);
+        window.addEventListener("popstate", onPopState, true);
         window.addEventListener("beforeunload", onBeforeUnload, true);
+        window.addEventListener("pagehide", onPageHide, true);
 
         document.addEventListener("selectionchange", onSelectionChange, true);
-
-        window.addEventListener("blur", onWindowBlur, true);
-        window.addEventListener("focus", onWindowFocus, true);
 
         if (typeof document !== "undefined" && document.addEventListener) {
             document.addEventListener("visibilitychange", onVisibilityChange, true);
@@ -219,12 +222,11 @@
         window.removeEventListener("dragstart", onDragStart, true);
         window.removeEventListener("keydown", onKeydown, true);
         window.removeEventListener("keyup", onKeyup, true);
+        window.removeEventListener("popstate", onPopState, true);
         window.removeEventListener("beforeunload", onBeforeUnload, true);
+        window.removeEventListener("pagehide", onPageHide, true);
 
         document.removeEventListener("selectionchange", onSelectionChange, true);
-
-        window.removeEventListener("blur", onWindowBlur, true);
-        window.removeEventListener("focus", onWindowFocus, true);
 
         if (typeof document !== "undefined" && document.removeEventListener) {
             document.removeEventListener("visibilitychange", onVisibilityChange, true);
@@ -373,45 +375,117 @@
         }
     }
 
-    function onBeforeUnload(e) {
-        if (!antiCheat.enabled || phase !== "active" || submitted) return;
-        isPageUnloading = true;
-        e.preventDefault();
-        e.returnValue = "A quiz is in progress. Refreshing or leaving the page will not submit your quiz.";
-        return e.returnValue;
+    async function skipAndLeaveQuestion(reason, navigatingAway = false) {
+        if (!antiCheat.enabled || phase !== "active" || !question || submitted) return;
+
+        const targetQ = question;
+        const targetQId = targetQ.id;
+        if (!targetQId) return;
+
+        if (navigatingAway) {
+            isNavigatingAway = true;
+        }
+
+        // Concurrency guard: Ensure Back navigation, blur, and visibilitychange do not skip multiple times
+        if (skippedQuestionIds.has(targetQId) || handlingLeaveForQuestionId === targetQId) {
+            return;
+        }
+
+        handlingLeaveForQuestionId = targetQId;
+        skippedQuestionIds.add(targetQId);
+        stopTimer();
+
+        const timeSpent = targetQ.time_limit_seconds > 0
+            ? Math.max(0, targetQ.time_limit_seconds - timeRemaining)
+            : 0;
+
+        // Save skipped state to backend with keepalive so it succeeds even if the page unloads
+        try {
+            await quizService.saveAnswer(quizId, targetQId, "", timeSpent, true, { keepalive: true });
+            userAnswers = [...userAnswers.filter(a => a.question_id !== targetQId), {
+                question_id: targetQId,
+                user_answer: "",
+                is_skipped: true,
+                time_spent_seconds: timeSpent,
+            }];
+        } catch (e) {
+            console.warn("Failed to record skipped state on leave:", e);
+        }
+
+        // If navigating away (e.g. browser Back button, closing tab, leaving page):
+        // Allow navigation to happen normally without terminating the quiz or loading next question.
+        if (navigatingAway || isNavigatingAway) {
+            handlingLeaveForQuestionId = null;
+            return;
+        }
+
+        // For tab/window switch:
+        // "Leave quiz → current question is skipped → next question becomes active"
+        showToast("Question skipped due to leaving the quiz window.", "info", 3000);
+
+        if (isLastQuestion()) {
+            await submitQuiz();
+        } else {
+            await loadNextQuestion();
+        }
+
+        handlingLeaveForQuestionId = null;
+    }
+
+    function onPopState() {
+        if (!antiCheat.enabled || phase !== "active" || !question || submitted) return;
+        // User pressed browser Back button:
+        // Automatically mark current question as skipped, save to backend, stop timer,
+        // and allow browser Back navigation to happen normally.
+        skipAndLeaveQuestion("back_button", true);
+    }
+
+    function isReloadShortcut(e) {
+        const key = (e.key || "").toLowerCase();
+        const mod = e.ctrlKey || e.metaKey;
+        if (e.key === "F5" || key === "f5") return true;
+        if (mod && key === "r") return true;
+        return false;
+    }
+
+    function onBeforeUnload() {
+        if (!antiCheat.enabled || phase !== "active" || !question || submitted) return;
+        isNavigatingAway = true;
+        // Mark navigating away so blur/visibilitychange during reload does not skip the question.
+        // The backend persists question started_at so page refresh never resets the question timer.
+    }
+
+    function onPageHide() {
+        if (!antiCheat.enabled || phase !== "active" || !question || submitted) return;
+        isNavigatingAway = true;
     }
 
     function onKeydown(e) {
         if (!antiCheat.enabled || phase !== "active") return;
 
-        const mod = e.ctrlKey || e.metaKey;
-        const key = (e.key || "").toLowerCase();
-
-        // 1. Block Page Refresh (F5, Ctrl+R, Cmd+R, Ctrl+Shift+R, Cmd+Shift+R)
-        if (
-            e.key === "F5" ||
-            key === "f5" ||
-            (mod && key === "r")
-        ) {
-            blockDefault(e);
-            showToast("Page refresh is disabled during the quiz. Please complete your questions.", "warning", 4000);
+        // Mark reloading so refresh does not trigger blur/visibilitychange skip
+        if (isReloadShortcut(e)) {
+            isNavigatingAway = true;
             return;
         }
 
-        // 2. Block Inspect / Developer Tools shortcuts as non-disruptive deterrents
+        const mod = e.ctrlKey || e.metaKey;
+        const key = (e.key || "").toLowerCase();
+
+        // 1. Block Inspect / Developer Tools shortcuts as non-disruptive deterrents
         if (isDevToolsShortcut(e)) {
             blockDefault(e);
             return;
         }
 
-        // 3. Block Copy / Cut / Paste shortcuts unconditionally everywhere during active quiz
+        // 2. Block Copy / Cut / Paste shortcuts unconditionally everywhere during active quiz
         if (isClipboardShortcut(e)) {
             blockDefault(e);
             showClipboardToast();
             return;
         }
 
-        // 4. Ctrl/Cmd + A: allow inside interactive inputs for code/text editing, block outside to prevent selecting entire quiz page
+        // 3. Ctrl/Cmd + A: allow inside interactive inputs for code/text editing, block outside to prevent selecting entire quiz page
         if (mod && key === "a") {
             const target = e.target || e.srcElement;
             if (closestInteractiveInput(target)) return;
@@ -451,31 +525,13 @@
         }
     }
 
-    let visibilityWarningCooldownUntil = 0;
-
     function onVisibilityChange() {
-        if (!antiCheat.enabled || isPageUnloading || submitted || phase !== "active") return;
+        if (!antiCheat.enabled || phase !== "active" || !question || submitted || isNavigatingAway) return;
 
-        const now = Date.now();
-        if (now < visibilityWarningCooldownUntil) return;
-
+        // Skips current question only when the user actually switches tabs, minimizes window, or navigates away
         if (document.visibilityState === "hidden") {
-            showToast("Please keep focus on the quiz window to complete your assessment.", "info", 3000);
-            visibilityWarningCooldownUntil = now + 6000;
+            skipAndLeaveQuestion("tab_switch", false);
         }
-    }
-
-    function onWindowBlur() {
-        if (!antiCheat.enabled || isPageUnloading || submitted || phase !== "active") return;
-
-        const now = Date.now();
-        if (now < visibilityWarningCooldownUntil) return;
-
-        showToast("Please keep focus on the quiz window to complete your assessment.", "info", 3000);
-        visibilityWarningCooldownUntil = now + 6000;
-    }
-
-    function onWindowFocus() {
     }
 
     function startTimer() {
@@ -485,18 +541,23 @@
         const limit = question.time_limit_seconds;
         if (!limit || limit <= 0) return;
 
-        if (timeRemaining <= 0) {
-            timeRemaining = limit;
-        }
-
-        timerInterval = setInterval(() => {
-            timeRemaining--;
+        function syncTimer() {
+            if (questionExpirationTime) {
+                const now = Date.now();
+                const diffSec = Math.max(0, Math.ceil((questionExpirationTime - now) / 1000));
+                timeRemaining = diffSec;
+            } else {
+                timeRemaining--;
+            }
 
             if (timeRemaining <= 0) {
                 stopTimer();
                 handleTimeUp();
             }
-        }, 1000);
+        }
+
+        syncTimer();
+        timerInterval = setInterval(syncTimer, 1000);
     }
 
     async function handleTimeUp() {
@@ -513,23 +574,96 @@
         }
     }
 
-    async function startQuiz() {
-        if (typeof window !== "undefined" && !window.confirm(
-            "Please ensure you are ready to begin your technical assessment. Take your time and answer each question carefully."
-        )) {
-            return;
+    function applyQuestionData(data, appendToHistory = true) {
+        if (!data) return false;
+
+        let curQ = data.question || data;
+        if (curQ && curQ.question && (curQ.question.id || curQ.question.text || curQ.question.question_text)) {
+            curQ = { ...curQ, ...curQ.question };
         }
 
+        const qId = curQ.id || data.id;
+        if (!qId) return false;
+
+        const effectiveQ = { ...curQ, id: qId };
+        currentQuestionData = data;
+        question = effectiveQ;
+        questionFeedback = "";
+        questionNumber = data.question_number || curQ.question_number || (appendToHistory ? questionHistory.length + 1 : 1);
+
+        if (data.total_questions) {
+            totalQuestions = data.total_questions;
+        } else if (curQ.total_questions) {
+            totalQuestions = curQ.total_questions;
+        }
+
+        if (data.remaining_seconds !== undefined && data.remaining_seconds !== null) {
+            timeRemaining = data.remaining_seconds;
+        } else if (effectiveQ.remaining_seconds !== undefined && effectiveQ.remaining_seconds !== null) {
+            timeRemaining = effectiveQ.remaining_seconds;
+        } else {
+            timeRemaining = effectiveQ.time_limit_seconds || 0;
+        }
+
+        const expStr = data.expiration_time || effectiveQ.expiration_time;
+        if (expStr) {
+            questionExpirationTime = new Date(expStr).getTime();
+        } else if (effectiveQ.time_limit_seconds > 0) {
+            questionExpirationTime = Date.now() + timeRemaining * 1000;
+        } else {
+            questionExpirationTime = null;
+        }
+
+        if (appendToHistory) {
+            const nextHistory = questionHistory.slice(0, historyIndex + 1);
+            nextHistory.push({
+                question: effectiveQ,
+                selectedOption: "",
+                code: "",
+                timeRemaining: timeRemaining,
+            });
+            questionHistory = nextHistory;
+            historyIndex = nextHistory.length - 1;
+        } else {
+            questionHistory = [{
+                question: effectiveQ,
+                selectedOption: "",
+                code: "",
+                timeRemaining: timeRemaining,
+            }];
+            historyIndex = 0;
+        }
+
+        selectedOption = "";
+        code = "";
+        const details = codingDetails(effectiveQ);
+        if (details?.code_template) {
+            code = details.code_template;
+        }
+
+        loadQuestionFeedback(effectiveQ.id);
+        phase = "active";
+        enableAntiCheat("quiz-active");
+        startTimer();
+        return true;
+    }
+
+    async function startQuiz() {
         phase = "starting";
         try {
             const appId = applicationId || quiz?.application_id;
             const jId = jobId || quiz?.job_id;
-            await quizService.startQuiz(quizId, appId, jId);
+            const res = await quizService.startQuiz(quizId, appId, jId);
             showToast("Quiz started!", "success");
             enableAntiCheat("quiz-active");
-            await loadNextQuestion();
+
+            // Direct use of start response avoids empty page and extra roundtrip
+            const applied = res && applyQuestionData(res, false);
+            if (!applied) {
+                await loadNextQuestion();
+            }
         } catch (e) {
-            showToast("Failed to start quiz", "error");
+            showToast("Failed to start quiz: " + (e?.message || ""), "error");
             phase = "ready";
         }
     }
@@ -537,53 +671,31 @@
     async function loadNextQuestion() {
         try {
             const q = await quizService.getQuestion(quizId);
-            if (q && q.status === "finished") {
-                stopTimer();
-                disableAntiCheat();
-                question = null;
-                currentQuestionData = q;
-                resultMessage = q.message || "Quiz complete!";
-                phase = "finished";
-                return;
-            }
-            if (!q || (!q.id && !q.question?.id)) {
+            if (q && (q.status === "ready" || q.status === "not_started")) {
                 phase = "ready";
                 return;
             }
-
-            currentQuestionData = q;
-            const curQ = q.question || q;
-
+            if (q && q.status === "finished") {
+                const msg = (q.message || "").toLowerCase();
+                if (msg.includes("no more questions") && q.question_number === 0) {
+                    phase = "ready";
+                } else {
+                    stopTimer();
+                    disableAntiCheat();
+                    question = null;
+                    currentQuestionData = q;
+                    resultMessage = q.message || "Quiz complete!";
+                    phase = "finished";
+                }
+                return;
+            }
             if (question) {
                 persistCurrentQuestionState();
             }
-
-            const nextHistory = questionHistory.slice(0, historyIndex + 1);
-            nextHistory.push({
-                question: curQ,
-                selectedOption: "",
-                code: "",
-                timeRemaining: curQ.time_limit_seconds || 0,
-            });
-
-            questionHistory = nextHistory;
-            historyIndex = nextHistory.length - 1;
-            question = curQ;
-            questionFeedback = "";
-            questionNumber = q.question_number || (historyIndex + 1);
-            if (q.total_questions) {
-                totalQuestions = q.total_questions;
+            const applied = applyQuestionData(q, true);
+            if (!applied) {
+                phase = "ready";
             }
-            selectedOption = "";
-            code = "";
-            timeRemaining = curQ.time_limit_seconds || 0;
-            const details = codingDetails(curQ);
-            if (details?.code_template) {
-                code = details.code_template;
-            }
-            await loadQuestionFeedback(curQ.id);
-            phase = "active";
-            startTimer();
         } catch (e) {
             showToast("Failed to load question", "error");
             if (questionNumber === 0) {
@@ -785,34 +897,22 @@
 
         try {
             const q = await quizService.getQuestion(quizId);
+            if (q && (q.status === "ready" || q.status === "not_started")) {
+                phase = "ready";
+                return;
+            }
             if (q && q.status === "finished") {
                 const msg = (q.message || "").toLowerCase();
-                if (msg.includes("no more questions")) {
+                if (msg.includes("no more questions") && q.question_number === 0) {
                     phase = "ready";
                 } else {
                     phase = "finished";
                     resultMessage = q.message || "You've completed this quiz!";
                 }
-            } else if (q && (q.id || q.question?.id)) {
-                currentQuestionData = q;
-                const curQ = q.question || q;
-                question = curQ;
-                questionFeedback = "";
-                questionNumber = q.question_number || 1;
-                if (q.total_questions) {
-                    totalQuestions = q.total_questions;
-                }
-                timeRemaining = curQ.time_limit_seconds || 0;
-                questionHistory = [{ question: curQ, selectedOption: "", code: "", timeRemaining: curQ.time_limit_seconds || 0 }];
-                historyIndex = 0;
-                const details = codingDetails(curQ);
-                if (details?.code_template) {
-                    code = details.code_template;
-                }
-                await loadQuestionFeedback(curQ.id);
-                phase = "active";
-                enableAntiCheat("quiz-active");
-                startTimer();
+                return;
+            }
+            if (q && (q.id || q.question?.id)) {
+                applyQuestionData(q, false);
                 await handleQuizStartAttempt();
             } else {
                 phase = "ready";
@@ -848,7 +948,7 @@
             </div>
 
         <!-- Ready / Start Screen -->
-        {:else if phase === "ready"}
+        {:else if phase === "ready" || phase === "starting"}
             <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12">
                 <div class="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-100">
                     <Code2 class="h-10 w-10 text-indigo-600" />
@@ -872,7 +972,8 @@
                 </div>
                 <button
                     onclick={startQuiz}
-                    class="btn mt-8 gap-2 border-indigo-600 bg-indigo-600 px-8 text-white hover:bg-indigo-700"
+                    disabled={phase === "starting"}
+                    class="btn mt-8 gap-2 border-indigo-600 bg-indigo-600 px-8 text-white hover:bg-indigo-700 disabled:opacity-75"
                 >
                     {#if phase === "starting"}
                         <Loader2 class="h-4 w-4 animate-spin" />
@@ -885,7 +986,8 @@
             </div>
 
         <!-- Active Question -->
-        {:else if phase === "active" && question}
+        {:else if phase === "active"}
+            {#if question}
             <div class="space-y-4">
                 <!-- Progress -->
                 <div class="flex items-center justify-between text-sm text-slate-500">
@@ -1044,6 +1146,11 @@
                     </div>
                 </div>
             </div>
+            {:else}
+                <div class="py-8">
+                    <SkeletonQuiz />
+                </div>
+            {/if}
 
         <!-- Finished / Submit Screen -->
         {:else if phase === "finished"}
@@ -1088,6 +1195,10 @@
                         Back to Applications
                     </button>
                 </div>
+            </div>
+        {:else}
+            <div class="py-8">
+                <SkeletonQuiz />
             </div>
         {/if}
     </div>
